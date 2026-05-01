@@ -1,0 +1,69 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: doctrine-rag-ollama-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: doctrine-rag-ollama-ollama-init
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    depends_on:
+      ollama:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 8 && ollama pull qwen2.5:3b"]
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+    container_name: doctrine-rag-ollama-backend
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: qwen2.5:3b
+      HF_HOME: /app/.cache/huggingface
+      TRANSFORMERS_CACHE: /app/.cache/huggingface
+      CHROMA_DIR: chroma_db
+      DOCTRINE_DATA_DIR: data/doctrine
+    env_file:
+      - .env
+    volumes:
+      - chroma_data:/app/chroma_db
+      - hf_cache:/app/.cache/huggingface
+      - ./backend/data/doctrine:/app/data/doctrine
+    ports:
+      - "8000:8000"
+    depends_on:
+      ollama:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 600s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    container_name: doctrine-rag-ollama-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  ollama_data:
+  chroma_data:
+  hf_cache:
