@@ -26,7 +26,8 @@ def _get_model() -> SentenceTransformer:
         return _model
 
 
-def embed_texts(texts: Sequence[str], batch_size: int = 32) -> list[list[float]]:
+def embed_texts(texts: Sequence[str], batch_size: int = 16) -> list[list[float]]:
+    """문서/청크 임베딩 (passage 쪽; 프롬프트 없음)."""
     cleaned = [t.strip() for t in texts]
     if any(not t for t in cleaned):
         raise ValueError("Empty string in batch for embedding.")
@@ -43,4 +44,16 @@ def embed_texts(texts: Sequence[str], batch_size: int = 32) -> list[list[float]]
 
 
 def embed_query(text: str) -> list[float]:
-    return embed_texts([text])[0]
+    """질문 임베딩. BGE-M3 등은 `prompt_name='query'` 지원 시 검색 품질에 유리."""
+    t = text.strip()
+    if not t:
+        raise ValueError("Query is empty.")
+    model = _get_model()
+    kwargs = {"normalize_embeddings": True, "show_progress_bar": False}
+    try:
+        vectors = model.encode([t], prompt_name="query", **kwargs)
+    except (TypeError, KeyError, ValueError):
+        vectors = model.encode([t], **kwargs)
+    if isinstance(vectors, np.ndarray):
+        return vectors.astype(float).tolist()[0]
+    return np.asarray(vectors[0], dtype=float).tolist()

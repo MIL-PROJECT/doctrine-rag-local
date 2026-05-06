@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 
 import config
-from chunker import chunk_text
-from document_loader import list_doctrine_files, load_document
+from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
 from embeddings import embed_query, embed_texts
+from ingest_seed import ensure_ingested, ingest_doctrine_unified
 from llm import generate_answer
 import vector_store
 
@@ -18,80 +18,65 @@ logger = logging.getLogger(__name__)
 def _ensure_dirs() -> None:
     config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     config.DOCTRINE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    config.CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def ingest_doctrine_dir(directory: str | Path | None = None) -> dict:
+def ingest_structured_chunks(directory: str | Path | None = None) -> dict:
     """
-    Load all .pdf/.txt from directory, chunk, embed, store in Chroma.
-    Returns stats; does not touch .ingested flag (caller decides).
+    CSV / JSON / JSONL 행을 그대로 청크로 임베딩·저장 (재청킹 없음).
+    텍스트 컬럼: CHUNK_TEXT_COLUMN 또는 chunk_text, text, content … 자동 탐지.
     """
     _ensure_dirs()
-    root = Path(directory) if directory else config.DOCTRINE_DATA_DIR
-    files = list_doctrine_files(root)
-    if not files:
-        logger.warning("No .pdf or .txt files in %s", root)
+    root = Path(directory) if directory else config.CHUNKS_DATA_DIR
+    rows = load_all_chunk_rows(root, config.CHUNK_TEXT_COLUMN)
+    if not rows:
+        logger.warning("No chunk rows in %s (expected .csv, .json, .jsonl)", root)
         return {"chunks": 0, "files": []}
 
-    total_chunks = 0
-    seen_files: list[str] = []
+    texts = [t for t, _, _ in rows]
+    metas_chroma = [normalize_chroma_meta(m) for _, m, _ in rows]
+    embeddings = embed_texts(texts)
+    n = vector_store.add_chunk_records(texts, embeddings, metas_chroma)
+    files = sorted({f for _, _, f in rows})
+    logger.info("Ingested %s structured chunks from %s file(s)", n, len(files))
+    return {"chunks": n, "files": files, "mode": "chunks"}
 
-    for path in files:
-        try:
-            text = load_document(str(path))
-        except Exception as e:
-            logger.exception("Failed to load %s", path)
-            raise RuntimeError(f"Failed to load {path.name}: {e}") from e
 
-        if not text.strip():
-            logger.warning("Skipping empty extract: %s", path.name)
-            continue
-
-        chunks = chunk_text(text, config.CHUNK_SIZE, config.CHUNK_OVERLAP)
-        if not chunks:
-            continue
-
-        embeddings = embed_texts(chunks)
-        source_name = path.name
-        n = vector_store.add_chunks(
-            chunks,
-            embeddings,
-            source_name=source_name,
-            start_index=0,
-        )
-        total_chunks += n
-        seen_files.append(source_name)
-
-    logger.info("Ingested %s chunks from %s files", total_chunks, len(seen_files))
-    return {"chunks": total_chunks, "files": seen_files}
+def ingest_corpus() -> dict:
+    """INGEST_MODE 에 따라 doctrine(.csv/.pdf/.txt) 또는 구조화 청크만 인제스트."""
+    if config.INGEST_MODE == "chunks":
+        return ingest_structured_chunks()
+    return ingest_doctrine_unified()
 
 
 def run_startup_ingest() -> None:
-    """If .ingested missing, ingest data/doctrine and create flag."""
-    _ensure_dirs()
-    flag = Path(config.INGEST_FLAG_PATH)
-    if flag.exists():
-        logger.info("Ingest flag present (%s), skipping startup ingest.", flag)
-        return
-
-    result = ingest_doctrine_dir(config.DOCTRINE_DATA_DIR)
-    if result["chunks"] > 0:
-        flag.touch()
-        logger.info("Startup ingest complete; wrote %s", flag)
-    else:
-        logger.warning(
-            "Startup ingest produced 0 chunks. Add files to %s and restart (or DELETE /reset).",
-            config.DOCTRINE_DATA_DIR,
-        )
+    """Chroma 문서 수·플래그에 따라 idempotent 인제스트 (ingest_seed 와 동일 규칙)."""
+    ensure_ingested()
 
 
 def build_context(chunks: list[dict]) -> str:
     blocks: list[str] = []
     for idx, item in enumerate(chunks, start=1):
         meta = item.get("metadata") or {}
+        title = meta.get("document_title") or meta.get("document_short_title") or ""
+        chapter = meta.get("chapter", "")
+        section = meta.get("section", "")
+        page = meta.get("pdf_page_start") or meta.get("page") or meta.get("pdf_page_end") or ""
+
+        cite_bits = [f"Source: {meta.get('source', 'unknown')}"]
+        if title:
+            cite_bits.append(f"Document: {title}")
+        if chapter:
+            cite_bits.append(f"Chapter: {chapter}")
+        if section:
+            cite_bits.append(f"Section: {section}")
+        if page not in ("", None):
+            cite_bits.append(f"Page: {page}")
+
         blocks.append(
             f"""
 [Evidence {idx}]
-Source: {meta.get("source", "unknown")}
+{", ".join(cite_bits)}
 Chunk index: {meta.get("chunk_index", "unknown")}
 Text:
 {item.get("content", "")}
@@ -106,10 +91,16 @@ def ask_question(question: str, top_k: int = 5) -> dict:
         raise ValueError("Question is empty.")
 
     if vector_store.collection_count() == 0:
-        return {
-            "answer": "No documents are indexed yet. Place PDF/TXT files in data/doctrine and restart the backend.",
-            "sources": [],
-        }
+        if config.INGEST_MODE == "chunks":
+            hint = (
+                f"No documents are indexed yet. Add chunk files (.csv, .json, .jsonl) to {config.CHUNKS_DATA_DIR} "
+                "and restart the backend (or DELETE /reset)."
+            )
+        else:
+            hint = (
+                "No documents are indexed yet. Place CSV/PDF/TXT files in data/doctrine and restart the backend."
+            )
+        return {"answer": hint, "sources": []}
 
     q_emb = embed_query(q)
     retrieved = vector_store.search(q_emb, top_k=top_k)
@@ -120,16 +111,29 @@ def ask_question(question: str, top_k: int = 5) -> dict:
     answer = generate_answer(q, context)
 
     sources: list[dict] = []
+    extra_keys = (
+        "document_title",
+        "document_short_title",
+        "document_id",
+        "chapter",
+        "section",
+        "subsection",
+        "pdf_page_start",
+        "pdf_page_end",
+        "chunk_id",
+    )
     for item in retrieved:
         meta = item.get("metadata") or {}
-        sources.append(
-            {
-                "source": meta.get("source"),
-                "chunk_index": meta.get("chunk_index"),
-                "distance": item.get("distance"),
-                "preview": (item.get("content") or "")[:300],
-            }
-        )
+        row: dict = {
+            "source": meta.get("source"),
+            "chunk_index": meta.get("chunk_index"),
+            "distance": item.get("distance"),
+            "preview": (item.get("content") or "")[:300],
+        }
+        for k in extra_keys:
+            if meta.get(k) is not None and meta.get(k) != "":
+                row[k] = meta.get(k)
+        sources.append(row)
 
     return {"answer": answer, "sources": sources}
 
@@ -138,7 +142,7 @@ def full_reset_and_reingest() -> dict:
     """DELETE /reset: clear Chroma, remove flag, re-ingest."""
     vector_store.reset_collection()
     vector_store.remove_ingest_flag()
-    result = ingest_doctrine_dir(config.DOCTRINE_DATA_DIR)
+    result = ingest_corpus()
     if result["chunks"] > 0:
         Path(config.INGEST_FLAG_PATH).touch()
     return {"message": "Vector store reset and re-ingested.", **result}

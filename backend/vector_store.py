@@ -24,6 +24,15 @@ def collection_count() -> int:
     return _collection.count()
 
 
+def collection_stats() -> dict[str, Any]:
+    """헬스/모니터링용 — 컬렉션명·문서 수·설정상 Chroma 경로 표시."""
+    return {
+        "collection": config.COLLECTION_NAME,
+        "documents": collection_count(),
+        "path": config.CHROMA_PATH_DISPLAY,
+    }
+
+
 def add_chunks(
     chunks: list[str],
     embeddings: list[list[float]],
@@ -47,6 +56,27 @@ def add_chunks(
         metadatas=metadatas,
     )
     return len(chunks)
+
+
+def add_chunk_records(
+    documents: list[str],
+    embeddings: list[list[float]],
+    metadatas: list[dict[str, Any]],
+    ids: list[str] | None = None,
+) -> int:
+    """행마다 다른 메타데이터를 가진 청크 일괄 추가."""
+    if not documents:
+        return 0
+    if len(documents) != len(embeddings) or len(documents) != len(metadatas):
+        raise ValueError("documents, embeddings, metadatas length mismatch.")
+    id_list = ids if ids is not None and len(ids) == len(documents) else [str(uuid.uuid4()) for _ in documents]
+    _collection.add(
+        ids=id_list,
+        documents=documents,
+        embeddings=embeddings,
+        metadatas=metadatas,
+    )
+    return len(documents)
 
 
 def search(question_embedding: list[float], top_k: int) -> list[dict[str, Any]]:
