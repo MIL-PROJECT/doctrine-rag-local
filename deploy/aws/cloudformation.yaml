@@ -6,7 +6,7 @@ Description: >
 Parameters:
   InstanceType:
     Type: String
-    Default: t3.micro
+    Default: t3.large
     Description: Ollama + 임베딩 동시 구동 권장 (인제스트 포함이면 xlarge 이상).
 
   KeyName:
@@ -26,6 +26,14 @@ Parameters:
     Type: String
     Default: 0.0.0.0/0
     Description: 22/3000/8000 허용 CIDR — 운영에서는 좁히세요.
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: EC2와 Security Group을 생성할 VPC ID
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: EC2를 실행할 Subnet ID
 
   RootVolumeGiB:
     Type: Number
@@ -63,6 +71,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: doctrine-rag SSH + Next 3000 + API 8000
+      VpcId: !Ref VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 22
@@ -85,6 +94,7 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       ImageId: !Ref LatestAmiId
+      SubnetId: !Ref SubnetId
       KeyName: !If [HasKeyPair, !Ref KeyName, !Ref AWS::NoValue]
       IamInstanceProfile: !Ref InstanceProfile
       SecurityGroupIds:
@@ -104,7 +114,8 @@ Resources:
               exec > >(tee /var/log/doctrine-rag-bootstrap.log|logger -t bootstrap -s 2>/dev/console) 2>&1
 
               dnf update -y
-              dnf install -y docker git curl
+              # AL2023는 curl-minimal이 기본인 경우가 있어 curl 패키지 설치 시 충돌할 수 있음
+              dnf install -y docker git curl-minimal
               systemctl enable docker
               systemctl start docker
               usermod -aG docker ec2-user || true

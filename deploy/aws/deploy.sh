@@ -23,10 +23,12 @@ if [[ -z "$REGION" ]]; then
   exit 1
 fi
 
-INSTANCE_TYPE="${INSTANCE_TYPE:-t3.xlarge}"
+INSTANCE_TYPE="${INSTANCE_TYPE:-t3.large}"
 GIT_REPO="${GIT_REPO:-https://github.com/MIL-PROJECT/doctrine-rag-local.git}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 ALLOWED_CIDR="${ALLOWED_CIDR:-0.0.0.0/0}"
+VPC_ID="${VPC_ID:-vpc-06dd1b55ba36467dc}"
+SUBNET_ID="${SUBNET_ID:-subnet-059fae8dd88f48388}"
 KEY_NAME="${KEY_NAME:-}"
 
 PO=(
@@ -34,6 +36,8 @@ PO=(
   "GitRepositoryUrl=$GIT_REPO"
   "GitBranch=$GIT_BRANCH"
   "AllowedCidr=$ALLOWED_CIDR"
+  "VpcId=$VPC_ID"
+  "SubnetId=$SUBNET_ID"
 )
 if [[ -n "$KEY_NAME" ]]; then
   PO+=("KeyName=$KEY_NAME")

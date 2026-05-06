@@ -30,11 +30,14 @@ INGEST_FLAG_PATH = CHROMA_DIR / ".ingested"
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+OLLAMA_MAX_TOKENS = int(os.getenv("OLLAMA_MAX_TOKENS", "512"))
 
 # BGE-M3 (1024-dim). 모델을 바꾼 뒤에는 기존 Chroma 벡터 차원과 맞지 않으므로 /reset 또는 chroma_db 삭제 후 재인제스트 필요.
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 
 TOP_K_MAX = int(os.getenv("TOP_K_MAX", "20"))
+RAG_CHUNK_CHAR_LIMIT = max(200, int(os.getenv("RAG_CHUNK_CHAR_LIMIT", "1200")))
+RAG_CONTEXT_CHAR_LIMIT = max(2000, int(os.getenv("RAG_CONTEXT_CHAR_LIMIT", "4500")))
 
 # CSV 인제스트 시 임베딩·Chroma 추가 단위 (행 수). 메모리 부담 줄이기용.
 INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "64")))

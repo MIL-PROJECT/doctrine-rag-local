@@ -65,8 +65,10 @@ aws iam attach-role-policy \
 - **Variables (권장)**
   - `AWS_REGION` (예: `ap-northeast-2`)
   - `CFN_STACK_NAME` (예: `doctrine-rag-ec2`)
-  - `INSTANCE_TYPE` (예: `t3.micro`)
+  - `INSTANCE_TYPE` (예: `t3.large`)
   - `ALLOWED_CIDR` (예: `0.0.0.0/0`)
+  - `VPC_ID` (예: `vpc-06dd1b55ba36467dc`)
+  - `SUBNET_ID` (예: `subnet-059fae8dd88f48388`)
   - `KEY_NAME` (선택, SSH 키페어 이름)
   - `GIT_REPO` (선택, 기본은 현재 GitHub 저장소 URL)
 

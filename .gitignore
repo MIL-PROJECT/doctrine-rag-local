@@ -8,3 +8,4 @@ backend/uploads/*
 frontend/node_modules
 frontend/.next
 .DS_Store
+*.pem

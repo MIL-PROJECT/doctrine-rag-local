@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from time import perf_counter
 
 import config
 from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
@@ -60,6 +61,7 @@ def run_startup_ingest() -> None:
 
 def build_context(chunks: list[dict]) -> str:
     blocks: list[str] = []
+    total_chars = 0
     for idx, item in enumerate(chunks, start=1):
         meta = item.get("metadata") or {}
         title = meta.get("document_title") or meta.get("document_short_title") or ""
@@ -77,19 +79,30 @@ def build_context(chunks: list[dict]) -> str:
         if page not in ("", None):
             cite_bits.append(f"Page: {page}")
 
-        blocks.append(
+        raw_text = item.get("content", "") or ""
+        if len(raw_text) > config.RAG_CHUNK_CHAR_LIMIT:
+            text = raw_text[: config.RAG_CHUNK_CHAR_LIMIT].rstrip() + "\n...(truncated)"
+        else:
+            text = raw_text
+
+        block = (
             f"""
 [Evidence {idx}]
 {", ".join(cite_bits)}
 Chunk index: {meta.get("chunk_index", "unknown")}
 Text:
-{item.get("content", "")}
+{text}
 """.strip()
         )
+        if total_chars + len(block) > config.RAG_CONTEXT_CHAR_LIMIT:
+            break
+        blocks.append(block)
+        total_chars += len(block)
     return "\n\n".join(blocks)
 
 
 def ask_question(question: str, top_k: int = 5) -> dict:
+    t0 = perf_counter()
     q = question.strip()
     if not q:
         raise ValueError("Question is empty.")
@@ -101,13 +114,42 @@ def ask_question(question: str, top_k: int = 5) -> dict:
         )
         return {"answer": hint, "sources": []}
 
+    t_embed_start = perf_counter()
     q_emb = embed_query(q)
+    t_embed_ms = (perf_counter() - t_embed_start) * 1000
+
+    t_search_start = perf_counter()
     retrieved = vector_store.search(q_emb, top_k=top_k)
+    t_search_ms = (perf_counter() - t_search_start) * 1000
     if not retrieved:
+        logger.info(
+            "RAG timing | embed=%.1fms search=%.1fms llm=0.0ms total=%.1fms retrieved=0 top_k=%s",
+            t_embed_ms,
+            t_search_ms,
+            (perf_counter() - t0) * 1000,
+            top_k,
+        )
         return {"answer": "No relevant passages were retrieved.", "sources": []}
 
+    t_ctx_start = perf_counter()
     context = build_context(retrieved)
+    t_ctx_ms = (perf_counter() - t_ctx_start) * 1000
+
+    t_llm_start = perf_counter()
     answer = generate_answer(q, context)
+    t_llm_ms = (perf_counter() - t_llm_start) * 1000
+    t_total_ms = (perf_counter() - t0) * 1000
+    logger.info(
+        "RAG timing | embed=%.1fms search=%.1fms context=%.1fms llm=%.1fms total=%.1fms retrieved=%s top_k=%s context_chars=%s",
+        t_embed_ms,
+        t_search_ms,
+        t_ctx_ms,
+        t_llm_ms,
+        t_total_ms,
+        len(retrieved),
+        top_k,
+        len(context),
+    )
 
     sources: list[dict] = []
     extra_keys = (

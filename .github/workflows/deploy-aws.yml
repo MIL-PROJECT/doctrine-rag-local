@@ -22,11 +22,17 @@ on:
       instance_type:
         description: "EC2 instance type"
         required: false
-        default: "t3.micro"
+        default: "t3.large"
       allowed_cidr:
         description: "Ingress CIDR for 22/3000/8000"
         required: false
         default: "0.0.0.0/0"
+      vpc_id:
+        description: "VPC ID to create resources in"
+        required: true
+      subnet_id:
+        description: "Subnet ID to launch EC2 in"
+        required: true
 
 permissions:
   id-token: write
@@ -36,10 +42,12 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-2' }}
   STACK_NAME: ${{ inputs.stack_name || vars.CFN_STACK_NAME || 'doctrine-rag-ec2' }}
   TEMPLATE_FILE: deploy/aws/cloudformation.yaml
-  INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.micro' }}
+  INSTANCE_TYPE: ${{ inputs.instance_type || vars.INSTANCE_TYPE || 't3.large' }}
   GIT_REPO: ${{ vars.GIT_REPO || format('https://github.com/{0}.git', github.repository) }}
   GIT_BRANCH: ${{ inputs.git_branch || github.ref_name }}
   ALLOWED_CIDR: ${{ inputs.allowed_cidr || vars.ALLOWED_CIDR || '0.0.0.0/0' }}
+  VPC_ID: ${{ inputs.vpc_id || vars.VPC_ID || '' }}
+  SUBNET_ID: ${{ inputs.subnet_id || vars.SUBNET_ID || '' }}
   KEY_NAME: ${{ vars.KEY_NAME || '' }}
 
 jobs:
@@ -63,11 +71,18 @@ jobs:
 
       - name: Deploy stack
         run: |
+          if [ -z "$VPC_ID" ] || [ -z "$SUBNET_ID" ]; then
+            echo "VPC_ID and SUBNET_ID must be set via workflow inputs or repo variables." >&2
+            exit 1
+          fi
+
           PARAMS=(
             "InstanceType=$INSTANCE_TYPE"
             "GitRepositoryUrl=$GIT_REPO"
             "GitBranch=$GIT_BRANCH"
             "AllowedCidr=$ALLOWED_CIDR"
+            "VpcId=$VPC_ID"
+            "SubnetId=$SUBNET_ID"
           )
           if [ -n "$KEY_NAME" ]; then
             PARAMS+=("KeyName=$KEY_NAME")
