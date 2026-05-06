@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Startup: running ingest if needed (INGEST_MODE=%s)...", config.INGEST_MODE)
+    logger.info("Startup: running CSV chunk ingest if needed (dir=%s)...", config.CHUNKS_PATH_DISPLAY)
     await run_in_threadpool(run_startup_ingest)
     logger.info("Startup: ingest step finished. Chroma count=%s", vector_store.collection_count())
     yield
@@ -61,7 +61,7 @@ def health() -> dict[str, Any]:
         "ollama_reachable": ollama_healthcheck(),
         "ollama_model": config.OLLAMA_MODEL,
         "ingest_flag": config.INGEST_FLAG_PATH.exists(),
-        "ingest_mode": config.INGEST_MODE,
+        "chunks_data_dir": config.CHUNKS_PATH_DISPLAY,
     }
 
 

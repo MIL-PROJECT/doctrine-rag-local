@@ -18,13 +18,11 @@ _CHROMA_ENV = os.getenv("CHROMA_DIR", "chroma_db").strip() or "chroma_db"
 CHROMA_PATH_DISPLAY = _CHROMA_ENV
 CHROMA_DIR = (_BACKEND_ROOT / _CHROMA_ENV).resolve()
 COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "doctrine_ollama")
-DOCTRINE_DATA_DIR = _BACKEND_ROOT / os.getenv("DOCTRINE_DATA_DIR", "data/doctrine")
-# 구조화 청크(CSV/JSON/JSONL) 디렉터리 — INGEST_MODE=chunks 일 때 사용
-CHUNKS_DATA_DIR = _BACKEND_ROOT / os.getenv("CHUNKS_DATA_DIR", "data/chunks")
-# doctrine: PDF/TXT 자동 청킹 | chunks: CHUNKS_DATA_DIR 만 사용
-_m = os.getenv("INGEST_MODE", "doctrine").strip().lower()
-INGEST_MODE = _m if _m in ("doctrine", "chunks") else "doctrine"
-# 비어 있으면 chunk_text, text, content … 순으로 텍스트 컬럼 자동 탐지
+# 전처리 RAG 청크 CSV 디렉터리 (backend 기준 상대 경로 또는 절대 경로)
+_CHUNKS_REL = os.getenv("CHUNKS_DATA_DIR", "data/chunks").strip() or "data/chunks"
+CHUNKS_PATH_DISPLAY = _CHUNKS_REL
+CHUNKS_DATA_DIR = (_BACKEND_ROOT / _CHUNKS_REL).resolve()
+# 비우면 embedding_text → chunk_text → content 순으로 본문 컬럼 자동 선택
 CHUNK_TEXT_COLUMN = os.getenv("CHUNK_TEXT_COLUMN", "").strip() or None
 
 INGEST_FLAG_PATH = CHROMA_DIR / ".ingested"
@@ -36,9 +34,10 @@ OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
 # BGE-M3 (1024-dim). 모델을 바꾼 뒤에는 기존 Chroma 벡터 차원과 맞지 않으므로 /reset 또는 chroma_db 삭제 후 재인제스트 필요.
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "900"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
 TOP_K_MAX = int(os.getenv("TOP_K_MAX", "20"))
+
+# CSV 인제스트 시 임베딩·Chroma 추가 단위 (행 수). 메모리 부담 줄이기용.
+INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "64")))
 
 CORS_ORIGINS = [
     o.strip()

@@ -32,7 +32,7 @@ services:
       HF_HOME: /app/.cache/huggingface
       TRANSFORMERS_CACHE: /app/.cache/huggingface
       CHROMA_DIR: chroma_db
-      DOCTRINE_DATA_DIR: data/doctrine
+      CHUNKS_DATA_DIR: data/chunks
     env_file:
       - .env
     volumes:

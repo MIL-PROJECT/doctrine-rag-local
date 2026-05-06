@@ -1,4 +1,4 @@
-"""RAG orchestration: ingest doctrine corpus + answer questions."""
+"""RAG: CSV 청크 인제스트 + 질의 응답."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import config
 from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
 from embeddings import embed_query, embed_texts
-from ingest_seed import ensure_ingested, ingest_doctrine_unified
+from ingest_seed import ensure_ingested
 from llm import generate_answer
 import vector_store
 
@@ -17,40 +17,44 @@ logger = logging.getLogger(__name__)
 
 def _ensure_dirs() -> None:
     config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    config.DOCTRINE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     config.CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def ingest_structured_chunks(directory: str | Path | None = None) -> dict:
+def ingest_csv_chunks(directory: str | Path | None = None) -> dict:
     """
-    CSV / JSON / JSONL 행을 그대로 청크로 임베딩·저장 (재청킹 없음).
-    텍스트 컬럼: CHUNK_TEXT_COLUMN 또는 chunk_text, text, content … 자동 탐지.
+    CHUNKS_DATA_DIR 의 `*.csv` 행을 그대로 벡터로 저장 (재청킹 없음).
+    본문: CHUNK_TEXT_COLUMN 또는 embedding_text → chunk_text → content.
     """
     _ensure_dirs()
     root = Path(directory) if directory else config.CHUNKS_DATA_DIR
     rows = load_all_chunk_rows(root, config.CHUNK_TEXT_COLUMN)
     if not rows:
-        logger.warning("No chunk rows in %s (expected .csv, .json, .jsonl)", root)
+        logger.warning("No CSV rows in %s (expected `*.csv`)", root)
         return {"chunks": 0, "files": []}
 
-    texts = [t for t, _, _ in rows]
-    metas_chroma = [normalize_chroma_meta(m) for _, m, _ in rows]
-    embeddings = embed_texts(texts)
-    n = vector_store.add_chunk_records(texts, embeddings, metas_chroma)
-    files = sorted({f for _, _, f in rows})
-    logger.info("Ingested %s structured chunks from %s file(s)", n, len(files))
-    return {"chunks": n, "files": files, "mode": "chunks"}
+    batch = max(1, config.INGEST_BATCH_SIZE)
+    logger.info("Loaded %s CSV rows; embedding in batches of %s", len(rows), batch)
+    n = 0
+    files = {f for _, _, f in rows}
+    for start in range(0, len(rows), batch):
+        chunk = rows[start : start + batch]
+        texts = [t for t, _, _ in chunk]
+        metas_chroma = [normalize_chroma_meta(m) for _, m, _ in chunk]
+        embeddings = embed_texts(texts, batch_size=min(32, len(texts)))
+        n += vector_store.add_chunk_records(texts, embeddings, metas_chroma)
+        if (start // batch + 1) % 50 == 0 or start + batch >= len(rows):
+            logger.info("Ingest progress: %s / %s rows", min(start + batch, len(rows)), len(rows))
+    files_sorted = sorted(files)
+    logger.info("Ingested %s rows from %s CSV file(s)", n, len(files_sorted))
+    return {"chunks": n, "files": files_sorted, "mode": "csv_chunks"}
 
 
 def ingest_corpus() -> dict:
-    """INGEST_MODE 에 따라 doctrine(.csv/.pdf/.txt) 또는 구조화 청크만 인제스트."""
-    if config.INGEST_MODE == "chunks":
-        return ingest_structured_chunks()
-    return ingest_doctrine_unified()
+    """Chroma 재적재용 진입점 — CSV 청크만."""
+    return ingest_csv_chunks()
 
 
 def run_startup_ingest() -> None:
-    """Chroma 문서 수·플래그에 따라 idempotent 인제스트 (ingest_seed 와 동일 규칙)."""
     ensure_ingested()
 
 
@@ -91,15 +95,10 @@ def ask_question(question: str, top_k: int = 5) -> dict:
         raise ValueError("Question is empty.")
 
     if vector_store.collection_count() == 0:
-        if config.INGEST_MODE == "chunks":
-            hint = (
-                f"No documents are indexed yet. Add chunk files (.csv, .json, .jsonl) to {config.CHUNKS_DATA_DIR} "
-                "and restart the backend (or DELETE /reset)."
-            )
-        else:
-            hint = (
-                "No documents are indexed yet. Place CSV/PDF/TXT files in data/doctrine and restart the backend."
-            )
+        hint = (
+            f"No documents are indexed yet. Add preprocessed chunk CSV (e.g. All_RAG_Chunks.csv) under "
+            f"{config.CHUNKS_DATA_DIR} and restart the backend (or DELETE /reset)."
+        )
         return {"answer": hint, "sources": []}
 
     q_emb = embed_query(q)
@@ -139,7 +138,7 @@ def ask_question(question: str, top_k: int = 5) -> dict:
 
 
 def full_reset_and_reingest() -> dict:
-    """DELETE /reset: clear Chroma, remove flag, re-ingest."""
+    """DELETE /reset: clear Chroma, remove flag, re-ingest CSV."""
     vector_store.reset_collection()
     vector_store.remove_ingest_flag()
     result = ingest_corpus()

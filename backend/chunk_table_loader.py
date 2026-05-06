@@ -1,4 +1,4 @@
-"""미리 잘린 청크 + 메타(CSV / JSON / JSONL) 로드."""
+"""전처리된 RAG 청크 CSV 로드 (행 단위 → 임베딩용 텍스트 + 메타)."""
 
 from __future__ import annotations
 
@@ -11,16 +11,8 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# 텍스트 컬럼 후보 (앞에서부터 존재하면 사용)
-_DEFAULT_TEXT_KEYS = (
-    "chunk_text",
-    "text",
-    "content",
-    "body",
-    "chunk_body",
-    "passage",
-    "citation_text",
-)
+# 자동 본문 컬럼: 비었으면 앞에서부터 첫 비어 있지 않은 값 사용
+_RAG_TEXT_COLUMN_ORDER = ("embedding_text", "chunk_text", "content")
 
 
 def _slug_key(key: str) -> str:
@@ -53,11 +45,12 @@ def normalize_chroma_meta(raw: dict[str, Any]) -> dict[str, str | int | float | 
 def _pick_text_column(row: dict[str, Any], preferred: str | None) -> str:
     if preferred and preferred in row and str(row.get(preferred, "")).strip():
         return preferred
-    for k in _DEFAULT_TEXT_KEYS:
+    for k in _RAG_TEXT_COLUMN_ORDER:
         if k in row and str(row.get(k, "")).strip():
             return k
     raise ValueError(
-        f"No text column found. Tried {preferred or ''} and {_DEFAULT_TEXT_KEYS}. Keys: {list(row.keys())[:20]}"
+        f"No text column found. Tried {preferred or ''} and {_RAG_TEXT_COLUMN_ORDER}. "
+        f"Keys: {list(row.keys())[:20]}"
     )
 
 
@@ -75,46 +68,17 @@ def _row_to_text_and_meta(
     return text, meta
 
 
-def _load_jsonl(path: Path) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8-sig").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        rows.append(json.loads(line))
-    return rows
-
-
-def _load_json_array(path: Path) -> list[dict[str, Any]]:
-    data = json.loads(path.read_text(encoding="utf-8-sig"))
-    if not isinstance(data, list):
-        raise ValueError(f"{path}: JSON root must be an array of objects.")
-    return [x for x in data if isinstance(x, dict)]
-
-
 def _load_csv(path: Path) -> list[dict[str, Any]]:
-    text = path.read_text(encoding="utf-8-sig")
-    reader = csv.DictReader(text.splitlines())
-    return [dict(r) for r in reader if any((v or "").strip() for v in r.values())]
+    # newline="" 필수: 따옴표로 감싼 필드 안의 줄바꿈은 splitlines()로 나누면 깨짐
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        return [dict(r) for r in reader if any((v or "").strip() for v in r.values())]
 
 
-def load_chunk_file(path: Path) -> list[dict[str, Any]]:
-    suf = path.suffix.lower()
-    if suf == ".jsonl":
-        return _load_jsonl(path)
-    if suf == ".json":
-        return _load_json_array(path)
-    if suf == ".csv":
-        return _load_csv(path)
-    raise ValueError(f"Unsupported chunk file type: {path}")
-
-
-def list_chunk_files(directory: Path) -> list[Path]:
+def list_chunk_csv_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
-    exts = {".csv", ".json", ".jsonl"}
-    files = [p for p in sorted(directory.iterdir()) if p.is_file() and p.suffix.lower() in exts]
-    return files
+    return [p for p in sorted(directory.iterdir()) if p.is_file() and p.suffix.lower() == ".csv"]
 
 
 def load_all_chunk_rows(
@@ -125,21 +89,20 @@ def load_all_chunk_rows(
     Returns list of (text, raw_metadata_dict, provenance).
     provenance is 파일명 등 출처 표시용.
     """
-    paths = list_chunk_files(directory)
+    paths = list_chunk_csv_files(directory)
     if not paths:
         return []
     out: list[tuple[str, dict[str, Any], str]] = []
     for path in paths:
         try:
-            rows = load_chunk_file(path)
+            rows = _load_csv(path)
         except Exception:
-            logger.exception("Failed to read chunk file %s", path)
+            logger.exception("Failed to read chunk CSV %s", path)
             raise
         for i, row in enumerate(rows):
             if not isinstance(row, dict):
                 logger.warning("Skip non-object row %s in %s", i, path.name)
                 continue
-            # normalize keys to str (CSV may have odd keys)
             clean_row = {str(k): v for k, v in row.items()}
             try:
                 text, meta = _row_to_text_and_meta(clean_row, text_column, path.name)

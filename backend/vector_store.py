@@ -8,12 +8,18 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
+from chromadb.config import Settings
 
 import config
 
 logger = logging.getLogger(__name__)
 
-_client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
+# anonymized_telemetry=False: posthog 최신 버전과 chromadb 텔레메트리 호출 시그니처 불일치로
+# "capture() takes 1 positional argument but 3 were given" 로그가 나오는 것을 방지
+_client = chromadb.PersistentClient(
+    path=str(config.CHROMA_DIR),
+    settings=Settings(anonymized_telemetry=False),
+)
 _collection = _client.get_or_create_collection(
     name=config.COLLECTION_NAME,
     metadata={"hnsw:space": "cosine"},
