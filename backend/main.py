@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import config
-from llm import ollama_healthcheck
+from llm import ollama_health_status
 from rag_service import ask_question, full_reset_and_reingest, run_startup_ingest
 import vector_store
 
@@ -52,14 +52,32 @@ class ChatResponse(BaseModel):
 @app.get("/health")
 def health() -> dict[str, Any]:
     vdb = vector_store.collection_stats()
+    doc_count = int(vdb.get("documents", 0))
+    ollama = ollama_health_status()
+    reachable = bool(ollama["reachable"])
+    ollama_block: dict[str, Any] = {
+        "reachable": reachable,
+        "base_url": ollama["base_url"],
+        "model": ollama["model"],
+    }
+    if reachable:
+        ollama_block["models"] = ollama.get("models") or []
+    else:
+        ollama_block["error"] = ollama.get("error") or "Remote Ollama server unavailable"
+
     return {
         "api": "ok",
         "status": "ok",
         "service": "doctrine-rag-ollama",
-        "vector_db": vdb,
-        "chroma_documents": vdb["documents"],
-        "ollama_reachable": ollama_healthcheck(),
-        "ollama_model": config.OLLAMA_MODEL,
+        "ollama": ollama_block,
+        "vector_db": {
+            "documents": doc_count,
+            "collection": vdb.get("collection"),
+            "path": vdb.get("path"),
+        },
+        "chroma_documents": doc_count,
+        "ollama_reachable": reachable,
+        "ollama_model": ollama["model"],
         "ingest_flag": config.INGEST_FLAG_PATH.exists(),
         "chunks_data_dir": config.CHUNKS_PATH_DISPLAY,
     }
