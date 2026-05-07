@@ -27,10 +27,14 @@ CHUNK_TEXT_COLUMN = os.getenv("CHUNK_TEXT_COLUMN", "").strip() or None
 
 INGEST_FLAG_PATH = CHROMA_DIR / ".ingested"
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+_raw_ollama_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
+OLLAMA_BASE_URL = _raw_ollama_url.rstrip("/") or "http://localhost:11434"
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
-OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+# OLLAMA_TIMEOUT (초) 또는 OLLAMA_TIMEOUT_SECONDS — 미설정 시 180
+_ollama_timeout = os.getenv("OLLAMA_TIMEOUT_SECONDS") or os.getenv("OLLAMA_TIMEOUT") or "180"
+OLLAMA_TIMEOUT_SECONDS = float(_ollama_timeout)
 OLLAMA_MAX_TOKENS = int(os.getenv("OLLAMA_MAX_TOKENS", "512"))
+OLLAMA_HEALTHCHECK_TIMEOUT = float(os.getenv("OLLAMA_HEALTHCHECK_TIMEOUT", "10"))
 
 # BGE-M3 (1024-dim). 모델을 바꾼 뒤에는 기존 Chroma 벡터 차원과 맞지 않으므로 /reset 또는 chroma_db 삭제 후 재인제스트 필요.
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")

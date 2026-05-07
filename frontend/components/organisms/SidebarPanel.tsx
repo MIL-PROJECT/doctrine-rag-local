@@ -146,7 +146,8 @@ type SidebarPanelProps = {
 };
 
 export function SidebarPanel({ conversations, health, onNewChat }: SidebarPanelProps) {
-  const modelLabel = health?.ollama_model ?? "—";
+  const modelLabel = health?.ollama?.model ?? health?.ollama_model ?? "—";
+  const ollamaReachable = health?.ollama?.reachable ?? health?.ollama_reachable;
   const chunkCount = health?.chroma_documents;
 
   return (
@@ -183,7 +184,7 @@ export function SidebarPanel({ conversations, health, onNewChat }: SidebarPanelP
             청크 수: {chunkCount === undefined ? "—" : String(chunkCount)}
           </IndexLine>
           <HealthHint>
-            Ollama: {health?.ollama_reachable === undefined ? "—" : health.ollama_reachable ? "연결됨" : "끊김"} · 인제스트 플래그:{" "}
+            Ollama: {ollamaReachable === undefined ? "—" : ollamaReachable ? "연결됨" : "끊김"} · 인제스트 플래그:{" "}
             {health?.ingest_flag === undefined ? "—" : health.ingest_flag ? "있음" : "없음"}
           </HealthHint>
         </InfoCard>

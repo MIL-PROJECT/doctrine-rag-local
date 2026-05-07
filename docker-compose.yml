@@ -1,24 +1,5 @@
+# Ollama는 Compose에 포함하지 않습니다. Colab GPU + ngrok 등 원격 URL을 .env 의 OLLAMA_BASE_URL 로 지정하세요.
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: doctrine-rag-ollama-ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-
-  ollama-init:
-    image: ollama/ollama:latest
-    container_name: doctrine-rag-ollama-ollama-init
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    depends_on:
-      ollama:
-        condition: service_started
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["sleep 8 && ollama pull qwen2.5:3b"]
-    restart: "no"
-
   backend:
     build:
       context: ./backend
@@ -26,8 +7,8 @@ services:
     command: >
       sh -c "uvicorn main:app --host 0.0.0.0 --port 8000"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: qwen2.5:3b
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_MODEL: ${OLLAMA_MODEL}
       HF_HOME: /app/.cache/huggingface
       TRANSFORMERS_CACHE: /app/.cache/huggingface
       CHROMA_DIR: chroma_db
@@ -40,18 +21,13 @@ services:
       - hf_cache:/app/.cache/huggingface
     ports:
       - "8000:8000"
-    depends_on:
-      ollama:
-        condition: service_started
-      ollama-init:
-        condition: service_completed_successfully
     healthcheck:
       test:
         ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
       interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 600s
+      start_period: 480s
 
   frontend:
     build:
@@ -60,7 +36,6 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:8000
     container_name: doctrine-rag-ollama-frontend
     environment:
-      # 브라우저는 호스트의 8000, Next 서버(Route Handler)는 compose 네트워크의 backend
       BACKEND_INTERNAL_URL: http://backend:8000
     ports:
       - "3000:3000"
@@ -69,5 +44,4 @@ services:
         condition: service_healthy
 
 volumes:
-  ollama_data:
   hf_cache:

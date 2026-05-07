@@ -34,9 +34,20 @@ export type BackendSource = {
   pdf_page_end?: string | number | null;
 };
 
+export type OllamaHealth = {
+  reachable: boolean;
+  base_url: string;
+  model: string;
+  models?: string[];
+  error?: string;
+};
+
 export type HealthPayload = {
   status?: string;
+  api?: string;
+  vector_db?: { documents?: number; collection?: string; path?: string };
   chroma_documents?: number;
+  ollama?: OllamaHealth;
   ollama_reachable?: boolean;
   ollama_model?: string;
   ingest_flag?: boolean;
