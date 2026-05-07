@@ -4,8 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
+    "dev:local": "next dev",
+    "dev:network": "next dev -H 0.0.0.0 -p 3000",
     "build": "next build",
     "start": "next start -H 0.0.0.0",
+    "start:network": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint"
   },
   "dependencies": {
