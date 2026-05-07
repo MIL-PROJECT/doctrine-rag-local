@@ -1,7 +1,6 @@
 "use client";
 
 import { DoctrineRagTemplate } from "@/components/templates/DoctrineRagTemplate";
-import { getPublicApiBaseUrl } from "@/lib/env";
 import { mapBackendSourcesToRows } from "@/lib/map-backend-source";
 import type { BackendSource, ChatMessage, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -34,11 +33,17 @@ export default function HomePage() {
   const [sources, setSources] = useState<ChatSourceRow[]>([]);
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [busy, setBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [submittedSearchQuery, setSubmittedSearchQuery] = useState("");
+  const [searchSearched, setSearchSearched] = useState(false);
+  const [sourceDocumentQuery, setSourceDocumentQuery] = useState("");
+  const [selectedPdfFileName, setSelectedPdfFileName] = useState<string | undefined>(undefined);
+  const [sourceResetKey, setSourceResetKey] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
 
   const refreshHealth = useCallback(async () => {
-    const base = getPublicApiBaseUrl();
     try {
-      const res = await fetch(`${base}/health`);
+      const res = await fetch("/api/health", { cache: "no-store" });
       const data = (await res.json()) as HealthPayload;
       setHealth(data);
     } catch {
@@ -97,14 +102,52 @@ export default function HomePage() {
     }
   }
 
+
+  function handleDoctrineSearch() {
+    const keyword = searchQuery.trim();
+    if (!keyword) return;
+    setSubmittedSearchQuery(keyword);
+    setSearchSearched(true);
+  }
+
+  function handleSourcePdfSelect(file: File) {
+    setSelectedPdfFileName(file.name);
+  }
+
+  function resetDoctrineSearchPage() {
+    setSearchQuery("");
+    setSubmittedSearchQuery("");
+    setSearchSearched(false);
+  }
+
+  function resetSourceDocumentsPage() {
+    setSourceDocumentQuery("");
+    setSelectedPdfFileName(undefined);
+    setSourceResetKey((key) => key + 1);
+  }
+
+  function handleTabChange(tab: string) {
+    if (tab === "교범 검색") {
+      resetDoctrineSearchPage();
+    }
+
+    if (tab === "출처 문서") {
+      resetSourceDocumentsPage();
+    }
+
+    setActiveTab(tab);
+  }
+
   function handleNewChat() {
+    setActiveTab("채팅");
     setChatTitle("새 대화");
     setSources([]);
     setInput("");
     setMessages([
       {
         role: "assistant",
-        content: "새 대화를 시작했습니다. 질문을 입력해 주세요.",
+        content:
+          "DoctrineRAG에 오신 것을 환영합니다. 아래 입력창에 교리 관련 질문을 입력하면 로컬 Chroma 인덱스와 Ollama가 답변을 생성합니다.",
         time: timeLabel(),
       },
     ]);
@@ -113,7 +156,7 @@ export default function HomePage() {
   return (
     <DoctrineRagTemplate
       activeTab={activeTab}
-      onTabChange={setActiveTab}
+      onTabChange={handleTabChange}
       conversations={SEED_CONVERSATIONS}
       health={health}
       chatTitle={chatTitle}
@@ -124,6 +167,18 @@ export default function HomePage() {
       onChatSubmit={handleChatSubmit}
       chatBusy={busy}
       onNewChat={handleNewChat}
+      searchQuery={searchQuery}
+      submittedSearchQuery={submittedSearchQuery}
+      searchSearched={searchSearched}
+      onSearchQueryChange={setSearchQuery}
+      onDoctrineSearch={handleDoctrineSearch}
+      sourceDocumentQuery={sourceDocumentQuery}
+      selectedPdfFileName={selectedPdfFileName}
+      sourceResetKey={sourceResetKey}
+      onSourceDocumentQueryChange={setSourceDocumentQuery}
+      onSourcePdfSelect={handleSourcePdfSelect}
+      darkMode={darkMode}
+      onDarkModeChange={setDarkMode}
     />
   );
 }

@@ -40,8 +40,7 @@ export type HealthPayload = {
   ollama_reachable?: boolean;
   ollama_model?: string;
   ingest_flag?: boolean;
-  /** Preprocessed chunk CSV directory (backend env CHUNKS_DATA_DIR) */
-  chunks_data_dir?: string;
+  ingest_mode?: string;
 };
 
 export type ChatApiResponse = {

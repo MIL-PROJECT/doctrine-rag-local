@@ -3,6 +3,7 @@
 import { Icon } from "@/components/atoms/Icon";
 import { ConversationRow } from "@/components/molecules/ConversationRow";
 import type { Conversation, HealthPayload } from "@/lib/types";
+import { useState } from "react";
 import styled from "styled-components";
 
 const Aside = styled.aside`
@@ -77,7 +78,7 @@ const FooterBlock = styled.div`
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 0 1.25rem;
+  padding: 0 1.25rem 1.25rem;
 `;
 
 const InfoCard = styled.div`
@@ -139,13 +140,84 @@ const SettingsButton = styled.button`
   }
 `;
 
+const SettingsPanel = styled.div`
+  display: grid;
+  gap: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 1rem;
+`;
+
+const SettingsTitle = styled.p`
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: #0f172a;
+`;
+
+const ToggleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+  color: #475569;
+`;
+
+const SwitchButton = styled.button<{ $on: boolean }>`
+  position: relative;
+  width: 3.25rem;
+  height: 1.75rem;
+  border: 1px solid ${({ $on }) => ($on ? "#1d4ed8" : "#cbd5e1")};
+  border-radius: 9999px;
+  background: ${({ $on }) => ($on ? "#1d4ed8" : "#cbd5e1")};
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0.1875rem;
+    left: ${({ $on }) => ($on ? "1.6875rem" : "0.1875rem")};
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 0.22);
+    transition: left 0.2s ease;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #bfdbfe;
+    outline-offset: 2px;
+  }
+`;
+
+const SwitchText = styled.span`
+  min-width: 2rem;
+  text-align: right;
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: #475569;
+`;
+
+const SwitchWrap = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
 type SidebarPanelProps = {
   conversations: Conversation[];
   health: HealthPayload | null;
   onNewChat?: () => void;
+  darkMode: boolean;
+  onDarkModeChange: (enabled: boolean) => void;
 };
 
-export function SidebarPanel({ conversations, health, onNewChat }: SidebarPanelProps) {
+export function SidebarPanel({ conversations, health, onNewChat, darkMode, onDarkModeChange }: SidebarPanelProps) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const modelLabel = health?.ollama_model ?? "—";
   const chunkCount = health?.chroma_documents;
 
@@ -187,10 +259,28 @@ export function SidebarPanel({ conversations, health, onNewChat }: SidebarPanelP
             {health?.ingest_flag === undefined ? "—" : health.ingest_flag ? "있음" : "없음"}
           </HealthHint>
         </InfoCard>
-        <SettingsButton type="button">
+        <SettingsButton type="button" onClick={() => setSettingsOpen((v) => !v)}>
           <Icon name="settings" size={20} />
           설정
         </SettingsButton>
+        {settingsOpen ? (
+          <SettingsPanel>
+            <SettingsTitle>화면 설정</SettingsTitle>
+            <ToggleRow>
+              <span>다크 모드</span>
+              <SwitchWrap>
+                <SwitchText>{darkMode ? "ON" : "OFF"}</SwitchText>
+                <SwitchButton
+                  type="button"
+                  $on={darkMode}
+                  aria-label="다크 모드 전환"
+                  aria-pressed={darkMode}
+                  onClick={() => onDarkModeChange(!darkMode)}
+                />
+              </SwitchWrap>
+            </ToggleRow>
+          </SettingsPanel>
+        ) : null}
       </FooterBlock>
     </Aside>
   );

@@ -70,19 +70,16 @@ type ChatWorkspaceProps = {
   onInputChange: (v: string) => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   busy?: boolean;
+  onNewChat?: () => void;
 };
 
-export function ChatWorkspace({ title, messages, input, onInputChange, onSubmit, busy }: ChatWorkspaceProps) {
+export function ChatWorkspace({ title, messages, input, onInputChange, onSubmit, busy, onNewChat }: ChatWorkspaceProps) {
   return (
     <Section>
       <Toolbar>
         <Title>{title}</Title>
         <ToolButtons>
-          {["새 대화", "공유", "보내기"].map((label) => (
-            <ToolButton key={label} type="button">
-              {label}
-            </ToolButton>
-          ))}
+          <ToolButton type="button" onClick={onNewChat}>새 대화</ToolButton>
         </ToolButtons>
       </Toolbar>
 

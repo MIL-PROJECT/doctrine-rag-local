@@ -1,6 +1,5 @@
 "use client";
 
-import { Icon } from "@/components/atoms/Icon";
 import { SourceReferenceCard } from "@/components/molecules/SourceReferenceCard";
 import type { ChatSourceRow } from "@/lib/types";
 import styled from "styled-components";
@@ -78,29 +77,6 @@ const ViewAllButton = styled.button`
   }
 `;
 
-const SearchCard = styled.div`
-  margin-top: 1.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  padding: 1rem;
-`;
-
-const SearchTitle = styled.div`
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  color: #0f172a;
-`;
-
-const SearchHint = styled.p`
-  margin: 0;
-  font-size: 0.75rem;
-  color: #64748b;
-`;
-
 type ReferenceSourcesPanelProps = {
   sources: ChatSourceRow[];
 };
@@ -126,14 +102,6 @@ export function ReferenceSourcesPanel({ sources }: ReferenceSourcesPanelProps) {
       <ViewAllButton type="button" disabled={sources.length === 0}>
         모든 출처 보기
       </ViewAllButton>
-
-      <SearchCard>
-        <SearchTitle>
-          <Icon name="search" size={20} />
-          교범 빠른 검색
-        </SearchTitle>
-        <SearchHint>백엔드 전용 검색 API는 없습니다. 채팅 탭에서 질문으로 RAG 검색을 사용하세요.</SearchHint>
-      </SearchCard>
     </Aside>
   );
 }

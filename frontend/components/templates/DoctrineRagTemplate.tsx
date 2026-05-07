@@ -4,15 +4,45 @@ import { AppHeader } from "@/components/organisms/AppHeader";
 import { ChatWorkspace } from "@/components/organisms/ChatWorkspace";
 import { ReferenceSourcesPanel } from "@/components/organisms/ReferenceSourcesPanel";
 import { SidebarPanel } from "@/components/organisms/SidebarPanel";
+import { DoctrineSearchWorkspace } from "@/components/organisms/DoctrineSearchWorkspace";
+import { SourceDocumentsWorkspace } from "@/components/organisms/SourceDocumentsWorkspace";
 import { bp } from "@/lib/breakpoints";
 import type { ChatMessage, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
 import { FormEvent } from "react";
 import styled from "styled-components";
 
-const Page = styled.main`
+const Page = styled.main<{ $darkMode: boolean }>`
   min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
+  background: ${({ $darkMode }) => ($darkMode ? "#020617" : "#f8fafc")};
+  color: ${({ $darkMode }) => ($darkMode ? "#e2e8f0" : "#0f172a")};
+
+  ${({ $darkMode }) =>
+    $darkMode
+      ? `
+    aside, section {
+      background: #0f172a;
+      border-color: #334155;
+    }
+
+    div, article, form, table, th, td {
+      border-color: #334155;
+    }
+
+    h1, h2, h3, p, td, th, label {
+      color: #e2e8f0;
+    }
+
+    input, select {
+      background: #111827;
+      border-color: #334155;
+      color: #e2e8f0;
+    }
+
+    input::placeholder {
+      color: #94a3b8;
+    }
+  `
+      : ""}
 `;
 
 const Grid = styled.div`
@@ -64,6 +94,18 @@ type DoctrineRagTemplateProps = {
   onChatSubmit: (e: FormEvent<HTMLFormElement>) => void;
   chatBusy?: boolean;
   onNewChat?: () => void;
+  searchQuery: string;
+  submittedSearchQuery: string;
+  searchSearched: boolean;
+  onSearchQueryChange: (v: string) => void;
+  onDoctrineSearch: () => void;
+  sourceDocumentQuery: string;
+  selectedPdfFileName?: string;
+  sourceResetKey: number;
+  onSourceDocumentQueryChange: (v: string) => void;
+  onSourcePdfSelect: (file: File) => void;
+  darkMode: boolean;
+  onDarkModeChange: (enabled: boolean) => void;
 };
 
 export function DoctrineRagTemplate({
@@ -79,13 +121,31 @@ export function DoctrineRagTemplate({
   onChatSubmit,
   chatBusy,
   onNewChat,
+  searchQuery,
+  submittedSearchQuery,
+  searchSearched,
+  onSearchQueryChange,
+  onDoctrineSearch,
+  sourceDocumentQuery,
+  selectedPdfFileName,
+  sourceResetKey,
+  onSourceDocumentQueryChange,
+  onSourcePdfSelect,
+  darkMode,
+  onDarkModeChange,
 }: DoctrineRagTemplateProps) {
   return (
-    <Page>
+    <Page $darkMode={darkMode}>
       <AppHeader activeTab={activeTab} onTabChange={onTabChange} />
 
       <Grid>
-        <SidebarPanel conversations={conversations} health={health} onNewChat={onNewChat} />
+        <SidebarPanel
+          conversations={conversations}
+          health={health}
+          onNewChat={onNewChat}
+          darkMode={darkMode}
+          onDarkModeChange={onDarkModeChange}
+        />
 
         {activeTab === "채팅" ? (
           <ChatWorkspace
@@ -95,6 +155,23 @@ export function DoctrineRagTemplate({
             onInputChange={onInputChange}
             onSubmit={onChatSubmit}
             busy={chatBusy}
+            onNewChat={onNewChat}
+          />
+        ) : activeTab === "교범 검색" ? (
+          <DoctrineSearchWorkspace
+            query={searchQuery}
+            submittedQuery={submittedSearchQuery}
+            searched={searchSearched}
+            onQueryChange={onSearchQueryChange}
+            onSearch={onDoctrineSearch}
+          />
+        ) : activeTab === "출처 문서" ? (
+          <SourceDocumentsWorkspace
+            key={sourceResetKey}
+            query={sourceDocumentQuery}
+            selectedFileName={selectedPdfFileName}
+            onQueryChange={onSourceDocumentQueryChange}
+            onFileSelect={onSourcePdfSelect}
           />
         ) : (
           <PlaceholderSection>

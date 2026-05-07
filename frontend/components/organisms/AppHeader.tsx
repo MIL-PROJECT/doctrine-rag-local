@@ -1,12 +1,11 @@
 "use client";
 
-import { Icon } from "@/components/atoms/Icon";
 import { NavTabButton } from "@/components/molecules/NavTabButton";
 import { bp } from "@/lib/breakpoints";
 import NextImage from "next/image";
 import styled from "styled-components";
 
-const TABS = ["채팅", "교범 검색", "출처 문서", "대시보드"] as const;
+const TABS = ["채팅", "교범 검색", "출처 문서"] as const;
 
 const Shell = styled.header`
   background: linear-gradient(to right, #020617, #172554, #0f172a);
@@ -29,9 +28,14 @@ const Inner = styled.div`
   }
 `;
 
-const Brand = styled.div`
+const Brand = styled.button`
   display: flex;
   min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
   align-items: center;
   gap: 0.25rem;
   border-bottom: 1px solid rgb(255 255 255 / 0.1);
@@ -56,6 +60,29 @@ const Brand = styled.div`
   @media (min-width: ${bp.xl}) {
     min-width: 18rem;
   }
+
+
+  &:hover {
+    text-decoration: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #bfdbfe;
+    outline-offset: -4px;
+  }
+`;
+
+
+const BrandHint = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;
 
 const LogoBox = styled.div`
@@ -165,71 +192,16 @@ const Actions = styled.div`
   }
 `;
 
-const ProjectButton = styled.button`
-  display: flex;
-  min-width: 0;
-  max-width: min(100%, 14rem);
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgb(255 255 255 / 0.15);
-  background: rgb(255 255 255 / 0.05);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  font-size: 0.75rem;
-  color: #e0f2fe;
-  cursor: pointer;
-
-  @media (min-width: ${bp.sm}) {
-    max-width: none;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-  }
-`;
-
-const ProjectLabel = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const Chevron = styled.span`
-  flex-shrink: 0;
-`;
-
-const Avatar = styled.div`
-  display: flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #334155;
-
-  @media (min-width: ${bp.sm}) {
-    height: 2.75rem;
-    width: 2.75rem;
-    font-size: 1rem;
-  }
-`;
-
 type AppHeaderProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  projectLabel?: string;
 };
 
-export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG · Ollama" }: AppHeaderProps) {
+export function AppHeader({ activeTab, onTabChange }: AppHeaderProps) {
   return (
     <Shell>
       <Inner>
-        <Brand>
+        <Brand type="button" onClick={() => onTabChange("채팅")} aria-label="채팅 화면으로 이동">
           <LogoBox>
             <LogoImage
               src="/header-emblem.png"
@@ -240,8 +212,9 @@ export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG
             />
           </LogoBox>
           <TitleBlock>
-            <Title>DoctrineRAG</Title>
+            <Title>DOCTOR</Title>
           </TitleBlock>
+          <BrandHint>채팅으로 이동</BrandHint>
         </Brand>
 
         <Nav aria-label="주 메뉴">
@@ -250,14 +223,7 @@ export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG
           ))}
         </Nav>
 
-        <Actions>
-          <ProjectButton type="button">
-            <Icon name="shield" size={18} />
-            <ProjectLabel>{projectLabel}</ProjectLabel>
-            <Chevron>⌄</Chevron>
-          </ProjectButton>
-          <Avatar>DR</Avatar>
-        </Actions>
+        <Actions aria-hidden="true" />
       </Inner>
     </Shell>
   );
