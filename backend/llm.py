@@ -9,7 +9,6 @@ import httpx
 import config
 
 logger = logging.getLogger(__name__)
-_http_client: httpx.Client | None = None
 
 SYSTEM_PROMPT = """
 You are a helpful assistant that answers strictly from the provided document evidence (RAG).
@@ -38,16 +37,14 @@ Answer in Korean using only the evidence above.""".strip()
             {"role": "user", "content": user_content},
         ],
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": config.OLLAMA_MAX_TOKENS},
+        "options": {"temperature": 0.2},
     }
 
     try:
-        global _http_client
-        if _http_client is None:
-            _http_client = httpx.Client(timeout=config.OLLAMA_TIMEOUT_SECONDS)
-        r = _http_client.post(url, json=payload)
-        r.raise_for_status()
-        data = r.json()
+        with httpx.Client(timeout=config.OLLAMA_TIMEOUT_SECONDS) as client:
+            r = client.post(url, json=payload)
+            r.raise_for_status()
+            data = r.json()
     except httpx.HTTPStatusError as e:
         logger.exception("Ollama HTTP error")
         raise RuntimeError(f"Ollama API HTTP error: {e.response.text}") from e

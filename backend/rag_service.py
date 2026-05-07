@@ -1,15 +1,14 @@
-"""RAG: CSV 청크 인제스트 + 질의 응답."""
+"""RAG orchestration: ingest doctrine corpus + answer questions."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from time import perf_counter
 
 import config
 from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
 from embeddings import embed_query, embed_texts
-from ingest_seed import ensure_ingested
+from ingest_seed import ensure_ingested, ingest_doctrine_unified
 from llm import generate_answer
 import vector_store
 
@@ -18,50 +17,45 @@ logger = logging.getLogger(__name__)
 
 def _ensure_dirs() -> None:
     config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
+    config.DOCTRINE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     config.CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def ingest_csv_chunks(directory: str | Path | None = None) -> dict:
+def ingest_structured_chunks(directory: str | Path | None = None) -> dict:
     """
-    CHUNKS_DATA_DIR 의 `*.csv` 행을 그대로 벡터로 저장 (재청킹 없음).
-    본문: CHUNK_TEXT_COLUMN 또는 embedding_text → chunk_text → content.
+    CSV / JSON / JSONL 행을 그대로 청크로 임베딩·저장 (재청킹 없음).
+    텍스트 컬럼: CHUNK_TEXT_COLUMN 또는 chunk_text, text, content … 자동 탐지.
     """
     _ensure_dirs()
     root = Path(directory) if directory else config.CHUNKS_DATA_DIR
     rows = load_all_chunk_rows(root, config.CHUNK_TEXT_COLUMN)
     if not rows:
-        logger.warning("No CSV rows in %s (expected `*.csv`)", root)
+        logger.warning("No chunk rows in %s (expected .csv, .json, .jsonl)", root)
         return {"chunks": 0, "files": []}
 
-    batch = max(1, config.INGEST_BATCH_SIZE)
-    logger.info("Loaded %s CSV rows; embedding in batches of %s", len(rows), batch)
-    n = 0
-    files = {f for _, _, f in rows}
-    for start in range(0, len(rows), batch):
-        chunk = rows[start : start + batch]
-        texts = [t for t, _, _ in chunk]
-        metas_chroma = [normalize_chroma_meta(m) for _, m, _ in chunk]
-        embeddings = embed_texts(texts, batch_size=min(32, len(texts)))
-        n += vector_store.add_chunk_records(texts, embeddings, metas_chroma)
-        if (start // batch + 1) % 50 == 0 or start + batch >= len(rows):
-            logger.info("Ingest progress: %s / %s rows", min(start + batch, len(rows)), len(rows))
-    files_sorted = sorted(files)
-    logger.info("Ingested %s rows from %s CSV file(s)", n, len(files_sorted))
-    return {"chunks": n, "files": files_sorted, "mode": "csv_chunks"}
+    texts = [t for t, _, _ in rows]
+    metas_chroma = [normalize_chroma_meta(m) for _, m, _ in rows]
+    embeddings = embed_texts(texts)
+    n = vector_store.add_chunk_records(texts, embeddings, metas_chroma)
+    files = sorted({f for _, _, f in rows})
+    logger.info("Ingested %s structured chunks from %s file(s)", n, len(files))
+    return {"chunks": n, "files": files, "mode": "chunks"}
 
 
 def ingest_corpus() -> dict:
-    """Chroma 재적재용 진입점 — CSV 청크만."""
-    return ingest_csv_chunks()
+    """INGEST_MODE 에 따라 doctrine(.csv/.pdf/.txt) 또는 구조화 청크만 인제스트."""
+    if config.INGEST_MODE == "chunks":
+        return ingest_structured_chunks()
+    return ingest_doctrine_unified()
 
 
 def run_startup_ingest() -> None:
+    """Chroma 문서 수·플래그에 따라 idempotent 인제스트 (ingest_seed 와 동일 규칙)."""
     ensure_ingested()
 
 
 def build_context(chunks: list[dict]) -> str:
     blocks: list[str] = []
-    total_chars = 0
     for idx, item in enumerate(chunks, start=1):
         meta = item.get("metadata") or {}
         title = meta.get("document_title") or meta.get("document_short_title") or ""
@@ -79,77 +73,42 @@ def build_context(chunks: list[dict]) -> str:
         if page not in ("", None):
             cite_bits.append(f"Page: {page}")
 
-        raw_text = item.get("content", "") or ""
-        if len(raw_text) > config.RAG_CHUNK_CHAR_LIMIT:
-            text = raw_text[: config.RAG_CHUNK_CHAR_LIMIT].rstrip() + "\n...(truncated)"
-        else:
-            text = raw_text
-
-        block = (
+        blocks.append(
             f"""
 [Evidence {idx}]
 {", ".join(cite_bits)}
 Chunk index: {meta.get("chunk_index", "unknown")}
 Text:
-{text}
+{item.get("content", "")}
 """.strip()
         )
-        if total_chars + len(block) > config.RAG_CONTEXT_CHAR_LIMIT:
-            break
-        blocks.append(block)
-        total_chars += len(block)
     return "\n\n".join(blocks)
 
 
 def ask_question(question: str, top_k: int = 5) -> dict:
-    t0 = perf_counter()
     q = question.strip()
     if not q:
         raise ValueError("Question is empty.")
 
     if vector_store.collection_count() == 0:
-        hint = (
-            f"No documents are indexed yet. Add preprocessed chunk CSV (e.g. All_RAG_Chunks.csv) under "
-            f"{config.CHUNKS_DATA_DIR} and restart the backend (or DELETE /reset)."
-        )
+        if config.INGEST_MODE == "chunks":
+            hint = (
+                f"No documents are indexed yet. Add chunk files (.csv, .json, .jsonl) to {config.CHUNKS_DATA_DIR} "
+                "and restart the backend (or DELETE /reset)."
+            )
+        else:
+            hint = (
+                "No documents are indexed yet. Place CSV/PDF/TXT files in data/doctrine and restart the backend."
+            )
         return {"answer": hint, "sources": []}
 
-    t_embed_start = perf_counter()
     q_emb = embed_query(q)
-    t_embed_ms = (perf_counter() - t_embed_start) * 1000
-
-    t_search_start = perf_counter()
     retrieved = vector_store.search(q_emb, top_k=top_k)
-    t_search_ms = (perf_counter() - t_search_start) * 1000
     if not retrieved:
-        logger.info(
-            "RAG timing | embed=%.1fms search=%.1fms llm=0.0ms total=%.1fms retrieved=0 top_k=%s",
-            t_embed_ms,
-            t_search_ms,
-            (perf_counter() - t0) * 1000,
-            top_k,
-        )
         return {"answer": "No relevant passages were retrieved.", "sources": []}
 
-    t_ctx_start = perf_counter()
     context = build_context(retrieved)
-    t_ctx_ms = (perf_counter() - t_ctx_start) * 1000
-
-    t_llm_start = perf_counter()
     answer = generate_answer(q, context)
-    t_llm_ms = (perf_counter() - t_llm_start) * 1000
-    t_total_ms = (perf_counter() - t0) * 1000
-    logger.info(
-        "RAG timing | embed=%.1fms search=%.1fms context=%.1fms llm=%.1fms total=%.1fms retrieved=%s top_k=%s context_chars=%s",
-        t_embed_ms,
-        t_search_ms,
-        t_ctx_ms,
-        t_llm_ms,
-        t_total_ms,
-        len(retrieved),
-        top_k,
-        len(context),
-    )
 
     sources: list[dict] = []
     extra_keys = (
@@ -180,7 +139,7 @@ def ask_question(question: str, top_k: int = 5) -> dict:
 
 
 def full_reset_and_reingest() -> dict:
-    """DELETE /reset: clear Chroma, remove flag, re-ingest CSV."""
+    """DELETE /reset: clear Chroma, remove flag, re-ingest."""
     vector_store.reset_collection()
     vector_store.remove_ingest_flag()
     result = ingest_corpus()

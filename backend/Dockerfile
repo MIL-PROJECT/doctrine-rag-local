@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN mkdir -p data/chunks uploads chroma_db .cache/huggingface
+RUN mkdir -p data/doctrine uploads chroma_db .cache/huggingface
 
 EXPOSE 8000
 

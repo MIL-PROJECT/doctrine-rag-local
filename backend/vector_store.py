@@ -8,20 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
-from chromadb.config import Settings
 
 import config
 
 logger = logging.getLogger(__name__)
-# Chroma telemetry-posthog version mismatch noise suppression.
-logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
-# anonymized_telemetry=False: posthog 최신 버전과 chromadb 텔레메트리 호출 시그니처 불일치로
-# "capture() takes 1 positional argument but 3 were given" 로그가 나오는 것을 방지
-_client = chromadb.PersistentClient(
-    path=str(config.CHROMA_DIR),
-    settings=Settings(anonymized_telemetry=False),
-)
+_client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
 _collection = _client.get_or_create_collection(
     name=config.COLLECTION_NAME,
     metadata={"hnsw:space": "cosine"},
@@ -39,6 +31,31 @@ def collection_stats() -> dict[str, Any]:
         "documents": collection_count(),
         "path": config.CHROMA_PATH_DISPLAY,
     }
+
+
+def add_chunks(
+    chunks: list[str],
+    embeddings: list[list[float]],
+    source_name: str,
+    start_index: int = 0,
+) -> int:
+    if not chunks:
+        return 0
+    if len(chunks) != len(embeddings):
+        raise ValueError("chunks and embeddings length mismatch.")
+
+    ids = [str(uuid.uuid4()) for _ in chunks]
+    metadatas: list[dict[str, Any]] = [
+        {"source": source_name, "chunk_index": start_index + i}
+        for i in range(len(chunks))
+    ]
+    _collection.add(
+        ids=ids,
+        documents=chunks,
+        embeddings=embeddings,
+        metadatas=metadatas,
+    )
+    return len(chunks)
 
 
 def add_chunk_records(
