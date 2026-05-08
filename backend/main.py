@@ -117,6 +117,8 @@ def health() -> dict[str, Any]:
 @app.get("/branches")
 def branches() -> dict[str, Any]:
     def _desc(b: str) -> str:
+        if b == "common":
+            return "육·해·공군 교리 근거를 병렬로 조회하여 통합 비교 응답"
         if b == "army":
             return "지상작전, 방어, 공격, 기동, 화력 운용 중심 질의응답"
         if b == "navy":
@@ -124,13 +126,25 @@ def branches() -> dict[str, Any]:
         return "항공작전, 공역통제, 항공전력 운용 중심 질의응답"
 
     def _label(b: str) -> str:
-        return {"army": "육군", "navy": "해군", "air_force": "공군"}[b]
+        return {"common": "공통", "army": "육군", "navy": "해군", "air_force": "공군"}[b]
 
     def _theme(b: str) -> str:
-        return {"army": "land", "navy": "sea", "air_force": "air"}[b]
+        return {"common": "common", "army": "land", "navy": "sea", "air_force": "air"}[b]
 
     items = []
-    for b in config.SERVICE_BRANCHES:
+    for b in ("common", *config.SERVICE_BRANCHES):
+        if b == "common":
+            items.append(
+                {
+                    "id": b,
+                    "label": _label(b),
+                    "collection": "all_branches",
+                    "documents": int(sum(vector_store.collection_count(config.COLLECTION_MAP[x]) for x in config.SERVICE_BRANCHES)),
+                    "theme": _theme(b),
+                    "description": _desc(b),
+                }
+            )
+            continue
         col = config.COLLECTION_MAP[b]
         items.append(
             {

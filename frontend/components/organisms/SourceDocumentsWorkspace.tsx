@@ -1,6 +1,7 @@
 "use client";
 
 import { UploadDropzone } from "@/components/molecules/UploadDropzone";
+import type { BranchId } from "@/lib/types";
 import { useEffect, useMemo, useState } from "react";
 import styled from "styled-components";
 
@@ -13,6 +14,9 @@ type SourceDocumentRow = {
 };
 
 const Section = styled.section`
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
   min-width: 0;
   background: var(--surface);
   padding: 1.5rem;
@@ -232,7 +236,7 @@ const NoticeText = styled.p`
 
 type SourceDocumentsWorkspaceProps = {
   query: string;
-  branch: "army" | "navy" | "air_force";
+  branch: BranchId;
   selectedFileName?: string;
   onQueryChange: (value: string) => void;
   onFileSelect: (file: File) => void;
@@ -314,7 +318,8 @@ export function SourceDocumentsWorkspace({
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/source-documents?branch=${encodeURIComponent(branch)}`, { cache: "no-store" });
+        const targetBranch = branch === "common" ? "navy" : branch;
+        const res = await fetch(`/api/source-documents?branch=${encodeURIComponent(targetBranch)}`, { cache: "no-store" });
         const data = (await res.json()) as {
           documents?: Array<{
             doc_id?: string;

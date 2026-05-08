@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter
 import re
@@ -156,6 +157,7 @@ def _sources_from_retrieved(retrieved: list[dict]) -> list[dict]:
         "pdf_page_start",
         "pdf_page_end",
         "chunk_id",
+        "service_branch",
     )
     sources: list[dict] = []
     for item in retrieved:
@@ -202,6 +204,64 @@ def retrieve_passages(question: str, branch: str, top_k: int = 5) -> dict:
         return {"sources": [], "indexed": True}
 
     return {"branch": branch, "sources": _sources_from_retrieved(retrieved), "indexed": True}
+
+
+def _branch_label(branch: str) -> str:
+    return {"army": "육군", "navy": "해군", "air_force": "공군"}.get(branch, branch)
+
+
+def _answer_common_parallel_rag(question: str, top_k: int) -> dict[str, Any]:
+    """공통 브랜치: 3군 RAG를 병렬 실행해 하나의 답변으로 합침."""
+    q = question.strip()
+    if not q:
+        raise ValueError("Question is empty.")
+
+    branch_results: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {
+            pool.submit(
+                _answer_with_rag,
+                q,
+                b,
+                top_k,
+                None,
+                "common_parallel_forced_rag",
+                1.0,
+            ): b
+            for b in config.SERVICE_BRANCHES
+        }
+        for fut in as_completed(futures):
+            b = futures[fut]
+            try:
+                branch_results[b] = fut.result()
+            except Exception as e:
+                branch_results[b] = {
+                    "mode": "rag",
+                    "branch": b,
+                    "answer": f"{_branch_label(b)} 처리 중 오류가 발생했습니다: {e}",
+                    "sources": [],
+                    "route_reason": "common_parallel_error",
+                    "route_confidence": 0.0,
+                }
+
+    answer_blocks: list[str] = []
+    merged_sources: list[dict[str, Any]] = []
+    for b in config.SERVICE_BRANCHES:
+        res = branch_results.get(b) or {}
+        answer_blocks.append(f"## {_branch_label(b)}\n{str(res.get('answer') or '답변 없음')}")
+        for src in (res.get("sources") or []):
+            row = dict(src) if isinstance(src, dict) else {}
+            row["service_branch"] = b
+            merged_sources.append(row)
+
+    return {
+        "mode": "rag",
+        "branch": "common",
+        "answer": "\n\n".join(answer_blocks),
+        "sources": merged_sources,
+        "route_reason": "common_parallel_forced_rag",
+        "route_confidence": 1.0,
+    }
 
 
 def list_indexed_documents(branch: str) -> dict[str, Any]:
@@ -412,6 +472,9 @@ def ask_question(question: str, branch: str, top_k: int = 5, mode: str = "auto")
 
     if mode not in ("auto", "rag", "general"):
         raise ValueError("Invalid mode. Use one of: auto, rag, general")
+    if branch == "common":
+        return _answer_common_parallel_rag(q, top_k)
+
     if branch not in config.SERVICE_BRANCHES:
         raise ValueError(f"Invalid branch: {branch}")
     if _is_casual_backchannel(q):

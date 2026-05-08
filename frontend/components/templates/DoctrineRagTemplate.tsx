@@ -7,12 +7,16 @@ import { SidebarPanel } from "@/components/organisms/SidebarPanel";
 import { DoctrineSearchWorkspace } from "@/components/organisms/DoctrineSearchWorkspace";
 import { SourceDocumentsWorkspace } from "@/components/organisms/SourceDocumentsWorkspace";
 import { bp } from "@/lib/breakpoints";
-import type { ChatMessage, ChatMode, ChatResponseMode, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
+import type { BranchId, ChatMessage, ChatMode, ChatResponseMode, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
 import { FormEvent } from "react";
 import styled from "styled-components";
 
-const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_force" }>`
-  min-height: 100vh;
+const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
+  display: flex;
+  height: 100dvh;
+  min-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
   line-height: 1.5;
 
   ${({ $branch, $darkMode }) => {
@@ -51,7 +55,8 @@ const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_f
               convTimeDark: "#bfdbfe",
               surfaceHoverLight: "#dbeafe",
             }
-          : {
+          : $branch === "air_force"
+            ? {
               a: "#6d28d9",
               aDark: "#a78bfa",
               pageBgLight: "#faf5ff",
@@ -66,7 +71,23 @@ const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_f
               convTimeLight: "rgba(255,255,255,0.9)",
               convTimeDark: "#ddd6fe",
               surfaceHoverLight: "#ede9fe",
-            };
+            }
+            : {
+                a: "#4b5563",
+                aDark: "#d1d5db",
+                pageBgLight: "#e5e7eb",
+                surfaceMutedLight: "#d1d5db",
+                borderLight: "#9ca3af",
+                pageBgDark: "#1f2937",
+                surfaceDark: "#2f3b4d",
+                surfaceMutedDark: "#374151",
+                borderDark: "#6b7280",
+                gradLight: "linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 45%, #d1d5db 100%)",
+                gradDark: "linear-gradient(180deg, #4b5563 0%, #374151 45%, #1f2937 100%)",
+                convTimeLight: "rgba(31,41,55,0.85)",
+                convTimeDark: "#e5e7eb",
+                surfaceHoverLight: "#cbd5e1",
+              };
 
     if ($darkMode) {
       return `
@@ -84,15 +105,19 @@ const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_f
     --text-subtle: #64748b;
     --link-accent: ${t.aDark};
     --input-bg: ${t.surfaceMutedDark};
-    --control-bg: ${t.surfaceMutedDark};
-    --control-hover: #3d4f60;
-    --send-bg: ${t.aDark};
+    --control-bg: ${$branch === "common" ? "#ffffff" : t.surfaceMutedDark};
+    --control-hover: ${$branch === "common" ? "#f3f4f6" : "#3d4f60"};
+    --send-bg: ${$branch === "common" ? "#ffffff" : t.aDark};
+    --send-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
     --rank-bg: ${t.aDark}22;
     --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.35);
-    --conversation-active-bg: ${t.surfaceMutedDark};
-    --conversation-active-fg: #f8fafc;
-    --conversation-active-border: ${t.aDark};
-    --conversation-time-active: ${t.convTimeDark};
+    --conversation-active-bg: ${$branch === "common" ? "#ffffff" : t.surfaceMutedDark};
+    --conversation-active-fg: ${$branch === "common" ? "#111111" : "#f8fafc"};
+    --conversation-active-border: ${$branch === "common" ? "#9ca3af" : t.aDark};
+    --conversation-time-active: ${$branch === "common" ? "#374151" : t.convTimeDark};
+    --sidebar-primary-btn-bg: ${$branch === "common" ? "#ffffff" : t.aDark};
+    --sidebar-primary-btn-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
+    --sidebar-primary-btn-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
     --avatar-user: ${t.aDark};
     --avatar-assistant: #4b5563;
     --mode-success: #5eead4;
@@ -123,14 +148,18 @@ const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_f
     --link-accent: ${t.a};
     --input-bg: #ffffff;
     --control-bg: #ffffff;
-    --control-hover: ${t.surfaceMutedLight};
-    --send-bg: ${t.a};
+    --control-hover: ${$branch === "common" ? "#f3f4f6" : t.surfaceMutedLight};
+    --send-bg: ${$branch === "common" ? "#ffffff" : t.a};
+    --send-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
     --rank-bg: ${t.surfaceMutedLight};
     --shadow-raised: 0 1px 2px rgb(15 23 42 / 0.07);
-    --conversation-active-bg: ${t.a};
-    --conversation-active-fg: #ffffff;
-    --conversation-active-border: transparent;
-    --conversation-time-active: ${t.convTimeLight};
+    --conversation-active-bg: ${$branch === "common" ? "#ffffff" : t.a};
+    --conversation-active-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
+    --conversation-active-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
+    --conversation-time-active: ${$branch === "common" ? "#374151" : t.convTimeLight};
+    --sidebar-primary-btn-bg: ${$branch === "common" ? "#ffffff" : t.a};
+    --sidebar-primary-btn-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
+    --sidebar-primary-btn-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
     --avatar-user: ${t.a};
     --avatar-assistant: #0f172a;
     --mode-success: #0f766e;
@@ -148,15 +177,16 @@ const Page = styled.main<{ $darkMode: boolean; $branch: "army" | "navy" | "air_f
 
 const Grid = styled.div`
   display: grid;
-  min-height: calc(100dvh - 10rem);
+  flex: 1;
+  min-height: 0;
   width: 100%;
   min-width: 0;
   grid-template-columns: 1fr;
+  overflow: hidden;
   box-shadow: inset 0 1px 0 0 var(--layout-divider);
 
   @media (min-width: ${bp.lg}) {
-    min-height: calc(100dvh - 5rem);
-    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr) minmax(14rem, 22.5rem);
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr) minmax(16rem, 25rem);
   }
 `;
 
@@ -187,8 +217,8 @@ const PlaceholderText = styled.p`
 type DoctrineRagTemplateProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  branch: "army" | "navy" | "air_force";
-  onBranchChange: (branch: "army" | "navy" | "air_force") => void;
+  branch: BranchId;
+  onBranchChange: (branch: BranchId) => void;
   conversations: Conversation[];
   onSelectConversation?: (id: string) => void;
   health: HealthPayload | null;

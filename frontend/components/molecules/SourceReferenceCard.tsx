@@ -45,14 +45,20 @@ const Title = styled.h3`
   line-clamp: 2;
   font-weight: 700;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 `;
 
 const MetaLine = styled.div`
   margin-top: 0.25rem;
   display: flex;
+  gap: 0.75rem;
   justify-content: space-between;
   font-size: 0.875rem;
   color: var(--text-muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 `;
 
 const Quote = styled.p`
@@ -61,6 +67,8 @@ const Quote = styled.p`
   font-style: italic;
   line-height: 1.5rem;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 `;
 
 const Footer = styled.div`
@@ -69,11 +77,14 @@ const Footer = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+  min-width: 0;
 `;
 
 const Score = styled.span`
   font-size: 0.875rem;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 `;
 
 const MetaLink = styled.a`
@@ -87,6 +98,7 @@ const MetaLink = styled.a`
   font-weight: 600;
   color: var(--link-accent);
   text-decoration: none;
+  white-space: nowrap;
 
   &:hover {
     background: var(--control-hover);

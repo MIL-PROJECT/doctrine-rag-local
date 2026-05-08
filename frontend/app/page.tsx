@@ -4,6 +4,7 @@ import { DoctrineRagTemplate } from "@/components/templates/DoctrineRagTemplate"
 import { mapBackendSourcesToRows } from "@/lib/map-backend-source";
 import type {
   BackendSource,
+  BranchId,
   ChatMessage,
   ChatMode,
   ChatResponseMode,
@@ -31,7 +32,7 @@ function timeLabel() {
 
 export default function HomePage() {
   const [activeTab, setActiveTab] = useState("채팅");
-  const [branch, setBranch] = useState<"army" | "navy" | "air_force">("navy");
+  const [branch, setBranch] = useState<BranchId>("navy");
   const [input, setInput] = useState("");
   const [chatTitle, setChatTitle] = useState("새 대화");
   const [messages, setMessages] = useState<ChatMessage[]>([

@@ -7,8 +7,10 @@ function slugFromFilename(name: string): string {
 
 export function mapBackendSourcesToRows(rows: BackendSource[]): ChatSourceRow[] {
   return rows.map((row, idx) => {
+    const branchLabel =
+      row.service_branch === "army" ? "[육군] " : row.service_branch === "navy" ? "[해군] " : row.service_branch === "air_force" ? "[공군] " : "";
     const src = String(row.source ?? "unknown");
-    const title = row.document_title ? String(row.document_title) : src;
+    const title = branchLabel + (row.document_title ? String(row.document_title) : src);
     const preview = String(row.preview ?? "");
     const dist = row.distance;
     const scoreLabel =
@@ -30,6 +32,7 @@ export function mapBackendSourcesToRows(rows: BackendSource[]): ChatSourceRow[] 
     return {
       rank: idx + 1,
       docId: slugFromFilename(docKey),
+      serviceBranch: row.service_branch ?? undefined,
       title,
       year: "—",
       page: pageLabel,

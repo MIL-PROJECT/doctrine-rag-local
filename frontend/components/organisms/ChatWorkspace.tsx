@@ -3,12 +3,16 @@
 import { ChatMessageBlock } from "@/components/molecules/ChatMessageBlock";
 import { PromptComposer } from "@/components/molecules/PromptComposer";
 import type { ChatMessage, ChatMode, ChatResponseMode } from "@/lib/types";
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useRef } from "react";
 import styled from "styled-components";
 
 const Section = styled.section`
+  display: flex;
+  min-height: 0;
+  height: 100%;
+  flex-direction: column;
   background: var(--surface);
-  padding: 1.75rem 2rem;
+  padding: 1.25rem 1.5rem;
 `;
 
 const Toolbar = styled.div`
@@ -58,6 +62,13 @@ const MessageList = styled.div`
   gap: 2rem;
 `;
 
+const MessageViewport = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+`;
+
 const BusyText = styled.p`
   margin: 1.5rem 0 0;
   font-size: 0.875rem;
@@ -80,6 +91,12 @@ const ModeBadge = styled.p`
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--mode-success);
+`;
+
+const ComposerWrap = styled.div`
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
 `;
 
 type ChatWorkspaceProps = {
@@ -107,6 +124,12 @@ export function ChatWorkspace({
   onModeChange,
   lastResponseMode,
 }: ChatWorkspaceProps) {
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, busy]);
+
   return (
     <Section>
       <Toolbar>
@@ -121,19 +144,23 @@ export function ChatWorkspace({
         </ToolButtons>
       </Toolbar>
 
-      <MessageList>
-        {messages.map((message, index) => (
-          <ChatMessageBlock key={`${message.role}-${index}-${message.time}`} message={message} index={index} />
-        ))}
-      </MessageList>
+      <MessageViewport>
+        <MessageList>
+          {messages.map((message, index) => (
+            <ChatMessageBlock key={`${message.role}-${index}-${message.time}`} message={message} index={index} />
+          ))}
+        </MessageList>
+        {busy && <BusyText>답변 생성 중…</BusyText>}
+        {!busy && lastResponseMode === "rag" && <ModeBadge>교리 RAG 응답</ModeBadge>}
+        {!busy && lastResponseMode === "general" && (
+          <ModeBadge>일반 채팅 응답 · 교리 문서 출처는 사용되지 않았습니다.</ModeBadge>
+        )}
+        <div ref={messagesEndRef} />
+      </MessageViewport>
 
-      {busy && <BusyText>답변 생성 중…</BusyText>}
-      {!busy && lastResponseMode === "rag" && <ModeBadge>교리 RAG 응답</ModeBadge>}
-      {!busy && lastResponseMode === "general" && (
-        <ModeBadge>일반 채팅 응답 · 교리 문서 출처는 사용되지 않았습니다.</ModeBadge>
-      )}
-
-      <PromptComposer value={input} onChange={onInputChange} onSubmit={onSubmit} disabled={busy} />
+      <ComposerWrap>
+        <PromptComposer value={input} onChange={onInputChange} onSubmit={onSubmit} disabled={busy} />
+      </ComposerWrap>
     </Section>
   );
 }

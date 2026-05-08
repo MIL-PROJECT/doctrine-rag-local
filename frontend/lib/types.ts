@@ -8,6 +8,7 @@ export type Conversation = {
 export type ChatSourceRow = {
   rank: number;
   docId: string;
+  serviceBranch?: "army" | "navy" | "air_force";
   title: string;
   year: string;
   page: string;
@@ -23,8 +24,10 @@ export type ChatMessage = {
 
 export type ChatMode = "auto" | "rag" | "general";
 export type ChatResponseMode = "rag" | "general";
+export type BranchId = "common" | "army" | "navy" | "air_force";
 
 export type BackendSource = {
+  service_branch?: "army" | "navy" | "air_force" | null;
   source?: string | null;
   chunk_index?: number | string | null;
   distance?: number | null;
@@ -61,7 +64,7 @@ export type HealthPayload = {
 
 export type ChatApiResponse = {
   mode?: ChatResponseMode;
-  branch?: "army" | "navy" | "air_force";
+  branch?: BranchId;
   answer: string;
   sources?: BackendSource[];
   route_reason?: string;

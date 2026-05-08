@@ -2,6 +2,7 @@
 
 import { DoctrineSearchBar } from "@/components/molecules/DoctrineSearchBar";
 import { Icon } from "@/components/atoms/Icon";
+import type { BranchId } from "@/lib/types";
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 
@@ -36,6 +37,9 @@ const RELATED_DOCTRINES = [
 ];
 
 const Section = styled.section`
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
   min-width: 0;
   background: var(--surface);
   padding: 1.5rem;
@@ -283,7 +287,7 @@ type DoctrineSearchWorkspaceProps = {
   query: string;
   submittedQuery: string;
   searched: boolean;
-  branch: "army" | "navy" | "air_force";
+  branch: BranchId;
   onQueryChange: (value: string) => void;
   onSearch: () => void;
 };
@@ -317,7 +321,8 @@ export function DoctrineSearchWorkspace({
     setFetchError(null);
     setHint(null);
 
-    fetch(`/api/search?q=${encodeURIComponent(q)}&branch=${encodeURIComponent(branch)}`, { cache: "no-store" })
+    const targetBranch = branch === "common" ? "navy" : branch;
+    fetch(`/api/search?q=${encodeURIComponent(q)}&branch=${encodeURIComponent(targetBranch)}`, { cache: "no-store" })
       .then(async (res) => {
         const data = (await res.json()) as {
           results?: SearchHit[];

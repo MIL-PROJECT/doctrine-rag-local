@@ -5,7 +5,7 @@ import { Icon } from "@/components/atoms/Icon";
 import styled from "styled-components";
 
 const Form = styled.form`
-  margin-top: 2.5rem;
+  margin-top: 0;
 `;
 
 const InputRow = styled.div`
@@ -46,7 +46,7 @@ const SendButton = styled.button`
   border: none;
   border-radius: 9999px;
   background: var(--send-bg);
-  color: #fff;
+  color: var(--send-fg, #fff);
   cursor: pointer;
 
   &:hover:not(:disabled) {

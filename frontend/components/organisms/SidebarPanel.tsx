@@ -10,6 +10,8 @@ const Aside = styled.aside`
   border-right: none;
   box-shadow: 1px 0 0 0 var(--layout-divider);
   background: var(--surface);
+  min-height: 0;
+  overflow-y: auto;
 `;
 
 const NewChatWrap = styled.div`
@@ -22,12 +24,12 @@ const NewChatButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  border: none;
+  border: 1px solid var(--sidebar-primary-btn-border, transparent);
   border-radius: 0.75rem;
-  background: var(--branch-accent, #020617);
+  background: var(--sidebar-primary-btn-bg, var(--branch-accent, #020617));
   padding: 0.75rem 1rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--sidebar-primary-btn-fg, #fff);
   cursor: pointer;
   box-shadow: var(--shadow-raised);
 

@@ -7,13 +7,18 @@ import styled, { css } from "styled-components";
 
 const TABS = ["채팅", "교범 검색", "출처 문서"] as const;
 
-const Shell = styled.header<{ $branch: "army" | "navy" | "air_force" }>`
+const Shell = styled.header<{ $branch: "common" | "army" | "navy" | "air_force" }>`
+  position: sticky;
+  top: 0;
+  z-index: 50;
   background: ${({ $branch }) =>
     $branch === "army"
       ? "linear-gradient(to right, #052e16, #166534, #14532d)"
       : $branch === "navy"
         ? "linear-gradient(to right, #020617, #1e40af, #1e293b)"
-        : "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"};
+        : $branch === "air_force"
+          ? "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"
+          : "linear-gradient(to right, #111827, #000000, #111827)"};
   color: #fff;
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
 `;
@@ -200,8 +205,8 @@ const Actions = styled.div`
 type AppHeaderProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  branch: "army" | "navy" | "air_force";
-  onBranchChange: (branch: "army" | "navy" | "air_force") => void;
+  branch: "common" | "army" | "navy" | "air_force";
+  onBranchChange: (branch: "common" | "army" | "navy" | "air_force") => void;
 };
 
 const BranchTabs = styled.div`
@@ -240,8 +245,8 @@ const BranchButton = styled.button<{ $active: boolean }>`
   }
 `;
 
-function branchLabel(id: "army" | "navy" | "air_force") {
-  return id === "army" ? "육군" : id === "navy" ? "해군" : "공군";
+function branchLabel(id: "common" | "army" | "navy" | "air_force") {
+  return id === "common" ? "공통" : id === "army" ? "육군" : id === "navy" ? "해군" : "공군";
 }
 
 export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: AppHeaderProps) {
@@ -272,7 +277,7 @@ export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: Ap
 
         <Actions>
           <BranchTabs aria-label="군 선택">
-            {(["army", "navy", "air_force"] as const).map((b) => (
+            {(["common", "army", "navy", "air_force"] as const).map((b) => (
               <BranchButton key={b} type="button" $active={b === branch} onClick={() => onBranchChange(b)}>
                 {branchLabel(b)}
               </BranchButton>
