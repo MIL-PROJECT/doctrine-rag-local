@@ -1,13 +1,13 @@
 "use client";
 
-import { Icon } from "@/components/atoms/Icon";
 import { SourceReferenceCard } from "@/components/molecules/SourceReferenceCard";
 import type { ChatSourceRow } from "@/lib/types";
 import styled from "styled-components";
 
 const Aside = styled.aside`
-  border-left: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border-left: none;
+  box-shadow: -1px 0 0 0 var(--layout-divider);
+  background: var(--surface-muted);
   padding: 1.25rem;
 `;
 
@@ -22,7 +22,7 @@ const HeadTitle = styled.h2`
   margin: 0;
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--text-primary);
 `;
 
 const IconButton = styled.button`
@@ -32,12 +32,13 @@ const IconButton = styled.button`
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--control-bg);
+  color: var(--text-secondary);
   cursor: pointer;
 
   &:hover {
-    background: #f1f5f9;
+    background: var(--control-hover);
   }
 `;
 
@@ -50,22 +51,23 @@ const CardList = styled.div`
 const EmptyHint = styled.p`
   margin: 0;
   border-radius: 0.75rem;
-  border: 1px dashed #e2e8f0;
-  background: #fff;
+  border: 1px dashed var(--border);
+  background: var(--surface);
   padding: 1rem;
   font-size: 0.875rem;
-  color: #64748b;
+  line-height: 1.5;
+  color: var(--text-muted);
 `;
 
 const ViewAllButton = styled.button`
   margin-top: 1rem;
   width: 100%;
   border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--control-bg);
   padding: 0.75rem;
   font-weight: 700;
-  color: #1e3a8a;
+  color: var(--link-accent);
   cursor: pointer;
 
   &:disabled {
@@ -74,31 +76,8 @@ const ViewAllButton = styled.button`
   }
 
   &:hover:not(:disabled) {
-    background: #f8fafc;
+    background: var(--control-hover);
   }
-`;
-
-const SearchCard = styled.div`
-  margin-top: 1.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
-  padding: 1rem;
-`;
-
-const SearchTitle = styled.div`
-  margin-bottom: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  color: #0f172a;
-`;
-
-const SearchHint = styled.p`
-  margin: 0;
-  font-size: 0.75rem;
-  color: #64748b;
 `;
 
 type ReferenceSourcesPanelProps = {
@@ -126,14 +105,6 @@ export function ReferenceSourcesPanel({ sources }: ReferenceSourcesPanelProps) {
       <ViewAllButton type="button" disabled={sources.length === 0}>
         모든 출처 보기
       </ViewAllButton>
-
-      <SearchCard>
-        <SearchTitle>
-          <Icon name="search" size={20} />
-          교범 빠른 검색
-        </SearchTitle>
-        <SearchHint>백엔드 전용 검색 API는 없습니다. 채팅 탭에서 질문으로 RAG 검색을 사용하세요.</SearchHint>
-      </SearchCard>
     </Aside>
   );
 }

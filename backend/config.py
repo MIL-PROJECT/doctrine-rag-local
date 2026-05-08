@@ -13,6 +13,14 @@ _PROJECT_ROOT = _BACKEND_ROOT.parent
 load_dotenv(_PROJECT_ROOT / ".env")
 load_dotenv()
 
+# --- Multi-Branch Doctrine RAG (army/navy/air_force) ---
+SERVICE_BRANCHES = ("army", "navy", "air_force")
+COLLECTION_MAP: dict[str, str] = {
+    "army": os.getenv("CHROMA_COLLECTION_ARMY", "army_doctrine"),
+    "navy": os.getenv("CHROMA_COLLECTION_NAVY", "navy_doctrine"),
+    "air_force": os.getenv("CHROMA_COLLECTION_AIR_FORCE", "air_force_doctrine"),
+}
+
 # 디스크 경로(영구 저장). env 값은 상대 경로면 backend 기준으로 해석됩니다.
 _CHROMA_ENV = os.getenv("CHROMA_DIR", "chroma_db").strip() or "chroma_db"
 CHROMA_PATH_DISPLAY = _CHROMA_ENV
@@ -26,6 +34,13 @@ CHUNKS_DATA_DIR = (_BACKEND_ROOT / _CHUNKS_REL).resolve()
 CHUNK_TEXT_COLUMN = os.getenv("CHUNK_TEXT_COLUMN", "").strip() or None
 
 INGEST_FLAG_PATH = CHROMA_DIR / ".ingested"
+
+# 군별 청크 디렉터리: backend/data/chunks/{branch}/*.csv
+def chunks_dir_for_branch(branch: str) -> Path:
+    return (CHUNKS_DATA_DIR / branch).resolve()
+
+
+PROMPTS_DIR = (_BACKEND_ROOT / "rag" / "prompts").resolve()
 
 _raw_ollama_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
 OLLAMA_BASE_URL = _raw_ollama_url.rstrip("/") or "http://localhost:11434"
@@ -42,9 +57,12 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 TOP_K_MAX = int(os.getenv("TOP_K_MAX", "20"))
 RAG_CHUNK_CHAR_LIMIT = max(200, int(os.getenv("RAG_CHUNK_CHAR_LIMIT", "1200")))
 RAG_CONTEXT_CHAR_LIMIT = max(2000, int(os.getenv("RAG_CONTEXT_CHAR_LIMIT", "4500")))
+RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.75"))
 
 # CSV 인제스트 시 임베딩·Chroma 추가 단위 (행 수). 메모리 부담 줄이기용.
 INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "64")))
+# 임베딩 모델 인퍼런스 배치 크기 (OOM 완화용)
+EMBEDDING_BATCH_SIZE = max(1, int(os.getenv("EMBEDDING_BATCH_SIZE", "8")))
 
 CORS_ORIGINS = [
     o.strip()

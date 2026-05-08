@@ -34,6 +34,7 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_TOP_K_MAX: ${NEXT_PUBLIC_TOP_K_MAX:-20}
     container_name: doctrine-rag-ollama-frontend
     environment:
       BACKEND_INTERNAL_URL: http://backend:8000

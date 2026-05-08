@@ -22,14 +22,35 @@ MODEL_NOT_FOUND_HINT = (
     "Run `ollama pull` in Colab for this model."
 )
 
-SYSTEM_PROMPT = """
-You are a helpful assistant that answers strictly from the provided document evidence (RAG).
-Rules:
-1. Use only the information in the evidence blocks. If the evidence is insufficient, say so clearly in Korean.
-2. Do not invent facts not present in the evidence.
-3. Answer in Korean with sections: 요약, 근거 (cite evidence numbers), 한계.
-4. Keep a calm, educational tone suitable for training materials.
+BASE_SYSTEM_PROMPT = """
+Use only retrieved doctrine evidence (RAG).
+If evidence is insufficient, say the selected doctrine dataset does not contain sufficient information.
+Do not hallucinate or invent facts.
+Answer in Korean with sections: 요약, 근거 (cite evidence numbers).
+Do not add a '한계' section header. If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps.
+Keep a calm, educational tone suitable for training materials.
 """.strip()
+
+GENERAL_CHAT_SYSTEM_PROMPT = """
+You are a helpful Korean assistant for a military doctrine chatbot.
+If the user greets or asks casual/meta questions, respond naturally and briefly in Korean.
+Do not fabricate sensitive operational facts.
+If the user asks doctrine-specific content, suggest asking a concrete doctrine question with branch context.
+""".strip()
+
+
+def load_branch_prompt(branch: str) -> str:
+    """backend/rag/prompts/{branch}.txt 내용을 읽어 base prompt와 결합."""
+    if branch not in config.SERVICE_BRANCHES:
+        raise ValueError(f"Invalid branch: {branch}")
+    path = config.PROMPTS_DIR / f"{branch}.txt"
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        text = ""
+    if text:
+        return f"{text}\n\n{BASE_SYSTEM_PROMPT}".strip()
+    return BASE_SYSTEM_PROMPT
 
 
 def ollama_request_headers() -> dict[str, str]:
@@ -139,7 +160,7 @@ def ollama_healthcheck() -> bool:
     return bool(ollama_health_status()["reachable"])
 
 
-def generate_answer(question: str, context: str) -> str:
+def generate_rag_answer(question: str, context: str, system_prompt: str | None = None) -> str:
     url = f"{config.OLLAMA_BASE_URL}/api/chat"
     user_content = f"""[Question]
 {question}
@@ -153,7 +174,7 @@ Answer in Korean using only the evidence above.""".strip()
         "model": config.OLLAMA_MODEL,
         "stream": False,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": (system_prompt or BASE_SYSTEM_PROMPT)},
             {"role": "user", "content": user_content},
         ],
         "options": {
@@ -211,4 +232,73 @@ Answer in Korean using only the evidence above.""".strip()
     if content is None:
         return USER_FACING_UNAVAILABLE
 
+    return str(content).strip()
+
+
+# Backward-compatible alias
+def generate_answer(question: str, context: str, system_prompt: str | None = None) -> str:
+    return generate_rag_answer(question, context, system_prompt=system_prompt)
+
+
+def generate_general_answer(question: str, branch: str | None = None) -> str:
+    """RAG 문맥 없이 일반 대화/메타 질문에 짧게 응답."""
+    url = f"{config.OLLAMA_BASE_URL}/api/chat"
+    branch_hint = f"(selected_branch={branch})" if branch else ""
+    user_content = (
+        f"{branch_hint}\n"
+        f"User message: {question}\n\n"
+        "Please answer naturally in Korean with 12-16 sentences. "
+        "If the question is doctrine-related, include a short structured explanation (핵심 요점 -> 상세 설명 -> 정리) "
+        "and keep it educational."
+    ).strip()
+
+    payload: dict[str, Any] = {
+        "model": config.OLLAMA_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": GENERAL_CHAT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "options": {
+            "temperature": 0.4,
+            "top_p": 0.9,
+            # general 응답도 같은 토큰 상한을 사용 (프롬프트에서 길이를 늘려도
+            # 여기서 256 토큰 이하로 또 잘리지 않게)
+            "num_predict": config.OLLAMA_MAX_TOKENS,
+        },
+    }
+
+    headers = ollama_request_headers()
+    try:
+        with httpx.Client(timeout=_chat_timeout(), headers=headers) as client:
+            r = client.post(url, json=payload)
+    except httpx.TimeoutException:
+        logger.exception("Ollama general chat: timeout")
+        return USER_FACING_UNAVAILABLE
+    except httpx.RequestError:
+        logger.exception("Ollama general chat: connection failed (%s)", url)
+        return USER_FACING_UNAVAILABLE
+
+    body = r.text or ""
+    if r.status_code >= 400:
+        logger.error("Ollama general chat: HTTP %s — %s", r.status_code, body[:500])
+        return USER_FACING_UNAVAILABLE
+    if _looks_like_html(body):
+        logger.error("Ollama general chat: HTML response")
+        return USER_FACING_UNAVAILABLE
+
+    try:
+        data = r.json()
+    except ValueError:
+        logger.error("Ollama general chat: response is not JSON")
+        return USER_FACING_UNAVAILABLE
+
+    if not isinstance(data, dict):
+        return USER_FACING_UNAVAILABLE
+    message = data.get("message") or {}
+    if not isinstance(message, dict):
+        return USER_FACING_UNAVAILABLE
+    content = message.get("content")
+    if content is None:
+        return USER_FACING_UNAVAILABLE
     return str(content).strip()
