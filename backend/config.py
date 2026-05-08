@@ -57,7 +57,9 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 TOP_K_MAX = int(os.getenv("TOP_K_MAX", "20"))
 RAG_CHUNK_CHAR_LIMIT = max(200, int(os.getenv("RAG_CHUNK_CHAR_LIMIT", "1200")))
 RAG_CONTEXT_CHAR_LIMIT = max(2000, int(os.getenv("RAG_CONTEXT_CHAR_LIMIT", "4500")))
-RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.75"))
+# Chroma distance(hnsw:space=cosine)는 일반적으로 "값이 작을수록 더 유사"입니다.
+# RAG를 더 자주 타게 하려면 이 값을 올려(완화) 임계값을 더 관대하게 만듭니다.
+RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.85"))
 
 # CSV 인제스트 시 임베딩·Chroma 추가 단위 (행 수). 메모리 부담 줄이기용.
 INGEST_BATCH_SIZE = max(1, int(os.getenv("INGEST_BATCH_SIZE", "64")))

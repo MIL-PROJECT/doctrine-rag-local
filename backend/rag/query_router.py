@@ -117,6 +117,47 @@ _GENERAL_META_PATTERNS = (
     r"what\s+can\s+you\s+do",
 )
 
+# 짧은 확인·백채널(ㅇㅇ, 응, ok 등)은 교리 질의가 아님. 임베딩 검색만 하면 무작위 청크가
+# 걸려 RAG가 이상한 장문을 만들 수 있으므로 retrieval 전에 general 로 고정.
+_CASUAL_ACK_EXACT = frozenset(
+    {
+        "ㅇ",
+        "ㅇㅇ",
+        "ㅇㅇㅇ",
+        "ㅇㅋ",
+        "ㅇㅋㅇ",
+        "ㅎ",
+        "ㅎㅎ",
+        "ㅎㅎㅎ",
+        "응",
+        "응응",
+        "네",
+        "넵",
+        "네네",
+        "y",
+        "ok",
+        "okay",
+        "yes",
+        "yeah",
+        "yep",
+        "k",
+        "👍",
+        "👌",
+    }
+)
+
+
+def _is_casual_backchannel(question: str) -> bool:
+    compact = re.sub(r"\s+", "", question.strip().lower())
+    if not compact:
+        return True
+    if compact in _CASUAL_ACK_EXACT:
+        return True
+    # 6자 이하이고 ㅇ/ㅋ/ㅎ/ㄴ 등 채팅용 자모만 반복
+    if len(compact) <= 6 and re.fullmatch(r"[ㅇㅋㅎㄴㅂy]+", compact):
+        return True
+    return False
+
 
 def _normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().lower())
@@ -127,6 +168,8 @@ def _count_matches(q: str, keywords: tuple[str, ...]) -> int:
 
 
 def route_question(question: str, branch: str | None = None) -> dict[str, Any]:
+    if _is_casual_backchannel(question):
+        return {"route": "general", "reason": "casual_backchannel", "confidence": 0.97}
     q = _normalize(question)
     if not q:
         return {"route": "general", "reason": "empty_question", "confidence": 1.0}

@@ -13,7 +13,7 @@ from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
 from embeddings import embed_query, embed_texts
 from ingest_seed import ensure_ingested
 from llm import generate_general_answer, generate_rag_answer, load_branch_prompt
-from rag.query_router import route_question, STRONG_DOCTRINE_INTENT
+from rag.query_router import _is_casual_backchannel, route_question, STRONG_DOCTRINE_INTENT
 import vector_store
 
 logger = logging.getLogger(__name__)
@@ -204,6 +204,65 @@ def retrieve_passages(question: str, branch: str, top_k: int = 5) -> dict:
     return {"branch": branch, "sources": _sources_from_retrieved(retrieved), "indexed": True}
 
 
+def list_indexed_documents(branch: str) -> dict[str, Any]:
+    """군별 컬렉션에서 문서 단위 메타데이터를 집계."""
+    if branch not in config.SERVICE_BRANCHES:
+        raise ValueError(f"Invalid branch: {branch}")
+
+    collection = config.COLLECTION_MAP[branch]
+    if vector_store.collection_count(collection) == 0:
+        return {"branch": branch, "indexed": False, "documents": []}
+
+    metadatas = vector_store.list_document_metadatas(collection)
+    docs: dict[str, dict[str, Any]] = {}
+
+    for meta in metadatas:
+        source = str(meta.get("source") or "").strip()
+        title = str(meta.get("document_title") or meta.get("document_short_title") or source or "문서").strip()
+        doc_id = str(meta.get("document_id") or source or title).strip()
+        chapter = str(meta.get("chapter") or "").strip()
+        section = str(meta.get("section") or "").strip()
+
+        key = doc_id or title or source
+        if not key:
+            continue
+
+        row = docs.get(key)
+        if row is None:
+            row = {
+                "doc_id": key,
+                "title": title or key,
+                "source": source or None,
+                "document_no": doc_id or key,
+                "chunk_count": 0,
+                "keywords": set(),
+            }
+            docs[key] = row
+
+        row["chunk_count"] = int(row["chunk_count"]) + 1
+        if chapter:
+            row["keywords"].add(chapter)
+        if section:
+            row["keywords"].add(section)
+
+    items: list[dict[str, Any]] = []
+    for row in docs.values():
+        keywords = sorted(list(row["keywords"]))
+        items.append(
+            {
+                "doc_id": row["doc_id"],
+                "title": row["title"],
+                "source": row["source"],
+                "document_no": row["document_no"],
+                "chunk_count": row["chunk_count"],
+                "keywords": keywords,
+            }
+        )
+
+    items.sort(key=lambda x: (str(x["title"]).lower(), str(x["doc_id"]).lower()))
+    return {"branch": branch, "indexed": True, "documents": items}
+
+
 def build_context(chunks: list[dict]) -> str:
     blocks: list[str] = []
     total_chars = 0
@@ -355,6 +414,18 @@ def ask_question(question: str, branch: str, top_k: int = 5, mode: str = "auto")
         raise ValueError("Invalid mode. Use one of: auto, rag, general")
     if branch not in config.SERVICE_BRANCHES:
         raise ValueError(f"Invalid branch: {branch}")
+    if _is_casual_backchannel(q):
+        return {
+            "mode": "general",
+            "branch": branch,
+            "answer": (
+                "알겠습니다. 교리·작전·절차 등 구체적인 질문을 해 주시면, "
+                "선택하신 군(육·해·공) 교범 근거를 바탕으로 답변드릴게요."
+            ),
+            "sources": [],
+            "route_reason": "casual_backchannel",
+            "route_confidence": 1.0,
+        }
     if mode == "general":
         return {
             "mode": "general",

@@ -15,7 +15,7 @@ const Head = styled.div`
   margin-bottom: 1.25rem;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
 `;
 
 const HeadTitle = styled.h2`
@@ -23,23 +23,6 @@ const HeadTitle = styled.h2`
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-primary);
-`;
-
-const IconButton = styled.button`
-  display: flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  border: 1px solid var(--border);
-  background: var(--control-bg);
-  color: var(--text-secondary);
-  cursor: pointer;
-
-  &:hover {
-    background: var(--control-hover);
-  }
 `;
 
 const CardList = styled.div`
@@ -89,9 +72,6 @@ export function ReferenceSourcesPanel({ sources }: ReferenceSourcesPanelProps) {
     <Aside>
       <Head>
         <HeadTitle>참고 출처 ({sources.length})</HeadTitle>
-        <IconButton type="button" aria-label="패널 확장">
-          ↗
-        </IconButton>
       </Head>
 
       <CardList>

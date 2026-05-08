@@ -12,93 +12,6 @@ type SourceDocumentRow = {
   status: string;
 };
 
-const MOCK_DOCUMENTS: SourceDocumentRow[] = [
-  {
-    id: "doc-001",
-    doctrineName: "NWP 1: Naval Warfare",
-    keyword: "Sea Control, Naval Warfare, Command of the Seas",
-    documentNo: "NWP 1",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-002",
-    doctrineName: "NWP 3-30.1: Maritime Operations",
-    keyword: "Maritime Operations, Sea Denial, Joint Force",
-    documentNo: "NWP 3-30.1",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-003",
-    doctrineName: "JP 3-32: Maritime Security",
-    keyword: "Maritime Security, Freedom of Maneuver",
-    documentNo: "JP 3-32",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-004",
-    doctrineName: "NWP 3-56: Composite Warfare",
-    keyword: "Composite Warfare, CWC, Task Organization",
-    documentNo: "NWP 3-56",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-005",
-    doctrineName: "NWP 3-20: Surface Warfare",
-    keyword: "Surface Warfare, Sea Control, Surface Action Group",
-    documentNo: "NWP 3-20",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-006",
-    doctrineName: "NWP 3-22: Anti-Submarine Warfare",
-    keyword: "ASW, Undersea Warfare, Maritime Operations",
-    documentNo: "NWP 3-22",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-007",
-    doctrineName: "NWP 3-01: Air and Missile Defense",
-    keyword: "Air Defense, Missile Defense, Fleet Defense",
-    documentNo: "NWP 3-01",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-008",
-    doctrineName: "NWP 3-13: Information Operations",
-    keyword: "Information Operations, Information Superiority, C2",
-    documentNo: "NWP 3-13",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-009",
-    doctrineName: "NWP 3-32: Amphibious Operations",
-    keyword: "Amphibious Operations, Expeditionary, Joint Force",
-    documentNo: "NWP 3-32",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-010",
-    doctrineName: "NWP 4-01: Naval Logistics",
-    keyword: "Logistics, Sustainment, Fleet Support",
-    documentNo: "NWP 4-01",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-011",
-    doctrineName: "NWP 5-01: Navy Planning",
-    keyword: "Planning, Operational Design, Mission Analysis",
-    documentNo: "NWP 5-01",
-    status: "업로드 대기",
-  },
-  {
-    id: "doc-012",
-    doctrineName: "NWP 6-02: Communications",
-    keyword: "Communications, C2, EMCON",
-    documentNo: "NWP 6-02",
-    status: "업로드 대기",
-  },
-];
-
 const Section = styled.section`
   min-width: 0;
   background: var(--surface);
@@ -149,6 +62,22 @@ const FilterField = styled.label`
 `;
 
 const Select = styled.select`
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  outline: none;
+
+  &:focus {
+    border-color: var(--branch-accent);
+    box-shadow: 0 0 0 3px rgb(96 165 250 / 0.18);
+  }
+`;
+
+const SearchInput = styled.input`
   width: 100%;
   border-radius: 0.75rem;
   border: 1px solid var(--border);
@@ -303,16 +232,25 @@ const NoticeText = styled.p`
 
 type SourceDocumentsWorkspaceProps = {
   query: string;
+  branch: "army" | "navy" | "air_force";
   selectedFileName?: string;
   onQueryChange: (value: string) => void;
   onFileSelect: (file: File) => void;
 };
 
-export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: SourceDocumentsWorkspaceProps) {
-  const [documents, setDocuments] = useState<SourceDocumentRow[]>(MOCK_DOCUMENTS);
+export function SourceDocumentsWorkspace({
+  query,
+  branch,
+  selectedFileName,
+  onQueryChange,
+  onFileSelect,
+}: SourceDocumentsWorkspaceProps) {
+  const [documents, setDocuments] = useState<SourceDocumentRow[]>([]);
   const [keywordFilter, setKeywordFilter] = useState("전체");
   const [documentNoFilter, setDocumentNoFilter] = useState("전체");
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pageSize = 10;
 
   const keywordOptions = useMemo(() => {
@@ -323,9 +261,15 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
   const documentNoOptions = useMemo(() => ["전체", ...documents.map((doc) => doc.documentNo)], [documents]);
 
   const rows = documents.filter((doc) => {
+    const textQuery = query.trim().toLowerCase();
     const keywordMatched = keywordFilter === "전체" || doc.keyword.includes(keywordFilter);
     const documentNoMatched = documentNoFilter === "전체" || doc.documentNo === documentNoFilter;
-    return keywordMatched && documentNoMatched;
+    const textMatched =
+      !textQuery ||
+      doc.doctrineName.toLowerCase().includes(textQuery) ||
+      doc.keyword.toLowerCase().includes(textQuery) ||
+      doc.documentNo.toLowerCase().includes(textQuery);
+    return keywordMatched && documentNoMatched && textMatched;
   });
 
   function handleUpload(file: File) {
@@ -341,7 +285,7 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
         doctrineName: baseName,
         keyword: `업로드, ${extension}, 교범`,
         documentNo: nextNo,
-        status: "업로드 완료",
+        status: "로컬 업로드(미인덱싱)",
       },
       ...prev,
     ]);
@@ -364,6 +308,55 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
     }
   }, [currentPage, totalPages]);
 
+  useEffect(() => {
+    let disposed = false;
+    async function loadDocuments() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`/api/source-documents?branch=${encodeURIComponent(branch)}`, { cache: "no-store" });
+        const data = (await res.json()) as {
+          documents?: Array<{
+            doc_id?: string;
+            title?: string;
+            source?: string | null;
+            document_no?: string;
+            chunk_count?: number;
+            keywords?: string[];
+          }>;
+          error?: string;
+        };
+        if (!res.ok || data.error) {
+          throw new Error(data.error || "문서 목록 조회 실패");
+        }
+        const mapped = (data.documents ?? []).map((doc, index) => ({
+          id: String(doc.doc_id ?? `doc-${index + 1}`),
+          doctrineName: String(doc.title ?? doc.source ?? `문서 ${index + 1}`),
+          keyword: (doc.keywords ?? []).length > 0 ? (doc.keywords ?? []).join(", ") : "메타데이터 없음",
+          documentNo: String(doc.document_no ?? doc.doc_id ?? `DOC-${index + 1}`),
+          status: `인덱싱 완료 (${Number(doc.chunk_count ?? 0)} chunks)`,
+        }));
+        if (!disposed) {
+          setDocuments(mapped);
+          setCurrentPage(1);
+          setKeywordFilter("전체");
+          setDocumentNoFilter("전체");
+        }
+      } catch (e) {
+        if (!disposed) {
+          setDocuments([]);
+          setError(e instanceof Error ? e.message : "문서 목록 조회 실패");
+        }
+      } finally {
+        if (!disposed) setLoading(false);
+      }
+    }
+    loadDocuments();
+    return () => {
+      disposed = true;
+    };
+  }, [branch]);
+
   return (
     <Section>
       <Stack>
@@ -371,6 +364,17 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
           <Title>출처 문서</Title>
           <Description>교범명, 키워드, 문서번호 기준으로 출처 문서를 관리하고 hwp, docx, pdf 파일을 업로드합니다.</Description>
         </Header>
+
+        <FilterCard aria-label="출처 문서 검색">
+          <FilterField>
+            통합 검색
+            <SearchInput
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder="교범명, 키워드, 문서번호 검색"
+            />
+          </FilterField>
+        </FilterCard>
 
         <FilterCard aria-label="출처 문서 필터">
           <FilterField>
@@ -391,7 +395,11 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
           </FilterField>
         </FilterCard>
 
-        {rows.length === 0 ? (
+        {loading ? (
+          <EmptyCard>인덱싱된 문서 목록을 불러오는 중입니다.</EmptyCard>
+        ) : error ? (
+          <EmptyCard>문서 목록 조회 실패: {error}</EmptyCard>
+        ) : rows.length === 0 ? (
           <EmptyCard>선택한 필터와 일치하는 출처 문서가 없습니다.</EmptyCard>
         ) : (
           <TableCard>
@@ -444,7 +452,7 @@ export function SourceDocumentsWorkspace({ selectedFileName, onFileSelect }: Sou
         <Notice>
           <NoticeTitle>데모 UI 안내</NoticeTitle>
           <NoticeText>
-            이 탭의 업로드·목록은 브라우저 안에서만 반영되는 예시입니다. 실제 RAG 인덱스는 백엔드의{" "}
+            이 탭의 목록은 실제 백엔드 인덱스(군별 컬렉션 메타데이터)에서 불러옵니다. 업로드 버튼으로 추가한 항목은 브라우저 예시 상태이며, 실제 RAG 인덱스는{" "}
             <code style={{ fontSize: "0.8em" }}>data/chunks/*.csv</code> 를 넣고 서버를 재시작하거나{" "}
             <code style={{ fontSize: "0.8em" }}>DELETE /reset</code> 으로 재인제스트할 때 갱신됩니다. 공개 업로드 API는 없습니다.
           </NoticeText>

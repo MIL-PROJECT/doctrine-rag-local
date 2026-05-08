@@ -289,6 +289,7 @@ export function DoctrineRagTemplate({
           <SourceDocumentsWorkspace
             key={sourceResetKey}
             query={sourceDocumentQuery}
+            branch={branch}
             selectedFileName={selectedPdfFileName}
             onQueryChange={onSourceDocumentQueryChange}
             onFileSelect={onSourcePdfSelect}

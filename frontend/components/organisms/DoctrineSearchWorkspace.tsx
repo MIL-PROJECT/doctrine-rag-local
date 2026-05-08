@@ -47,7 +47,7 @@ const Header = styled.div`
 
 const Title = styled.h2`
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 2.5rem;
   font-weight: 800;
   color: var(--text-primary);
 `;

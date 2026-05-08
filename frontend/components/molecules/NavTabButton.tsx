@@ -9,11 +9,15 @@ const Button = styled.button<{ $active: boolean }>`
   border: none;
   background: transparent;
   cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   padding: 0.5rem 0.75rem;
   border-radius: 0.5rem;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
+
+  @media (min-width: ${bp.sm}) {
+    font-size: 1.0625rem;
+  }
 
   ${({ $active }) =>
     $active
@@ -31,7 +35,8 @@ const Button = styled.button<{ $active: boolean }>`
 
   @media (min-width: ${bp.lg}) {
     border-radius: 0;
-    padding: 1.75rem 0.5rem;
+    font-size: 1.125rem;
+    padding: 1.75rem 0.65rem;
     border-bottom: 1px solid transparent;
     background: transparent;
 

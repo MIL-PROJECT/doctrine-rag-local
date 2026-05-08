@@ -111,3 +111,25 @@ def remove_ingest_flag(path) -> None:
             path.unlink()
     except Exception:
         logger.warning("remove_ingest_flag failed", exc_info=True)
+
+
+def list_document_metadatas(collection_name: str, batch_size: int = 2000) -> list[dict[str, Any]]:
+    """컬렉션의 모든 메타데이터를 배치 조회."""
+    collection = _get_collection(collection_name)
+    total = collection.count()
+    if total <= 0:
+        return []
+
+    out: list[dict[str, Any]] = []
+    for offset in range(0, total, max(1, batch_size)):
+        size = min(batch_size, total - offset)
+        res = collection.get(
+            limit=size,
+            offset=offset,
+            include=["metadatas"],
+        )
+        metas = res.get("metadatas") or []
+        for meta in metas:
+            if isinstance(meta, dict):
+                out.append(dict(meta))
+    return out

@@ -11,7 +11,7 @@ from starlette.concurrency import run_in_threadpool
 
 import config
 from llm import ollama_health_status
-from rag_service import ask_question, full_reset_and_reingest, retrieve_passages, run_startup_ingest
+from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest
 import vector_store
 
 logging.basicConfig(
@@ -154,6 +154,15 @@ async def retrieve(body: RetrieveRequest) -> dict[str, Any]:
             return retrieve_passages(body.question.strip(), branch=body.branch, top_k=body.top_k)
 
         return await run_in_threadpool(_run)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/source-documents")
+async def source_documents(branch: str = "navy") -> dict[str, Any]:
+    """군별 인덱싱 문서 목록(문서 단위 집계)."""
+    try:
+        return await run_in_threadpool(lambda: list_indexed_documents(branch.strip() or "navy"))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
