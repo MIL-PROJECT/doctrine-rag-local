@@ -27,39 +27,46 @@ def _ensure_dirs() -> None:
     config.CHUNKS_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _run_csv_ingest() -> dict:
-    from rag_service import ingest_csv_chunks
+def _run_csv_ingest(branch: str) -> dict:
+    from rag_service import ingest_csv_chunks_for_branch
 
-    return ingest_csv_chunks()
+    return ingest_csv_chunks_for_branch(branch)
+
+
+def _flag_path(branch: str) -> Path:
+    return config.CHROMA_DIR / f".ingested_{branch}"
 
 
 def ensure_ingested() -> None:
-    """컬렉션·플래그 규칙에 따라 CSV 청크만 idempotent 인제스트."""
+    """군별 컬렉션·플래그 규칙에 따라 CSV 청크만 idempotent 인제스트."""
     _ensure_dirs()
-    flag = Path(config.INGEST_FLAG_PATH)
-    count = vector_store.collection_count()
+    for branch in config.SERVICE_BRANCHES:
+        col = config.COLLECTION_MAP[branch]
+        flag = _flag_path(branch)
+        count = vector_store.collection_count(col)
 
-    if count > 0:
-        if not flag.exists():
+        if count > 0:
+            if not flag.exists():
+                flag.touch()
+                logger.info("[%s] Chroma has %s docs; recreated missing flag %s", branch, count, flag)
+            else:
+                logger.info("[%s] Chroma has %s docs and flag exists; skipping ingest.", branch, count)
+            continue
+
+        if flag.exists():
+            flag.unlink()
+            logger.info("[%s] Removed stale ingest flag (collection empty).", branch)
+
+        result = _run_csv_ingest(branch)
+        if result.get("chunks", 0) > 0:
             flag.touch()
-            logger.info("Chroma has %s documents; recreated missing flag %s", count, flag)
+            logger.info("[%s] Ingest complete: %s rows from CSV", branch, result["chunks"])
         else:
-            logger.info("Chroma has %s documents and flag exists; skipping ingest.", count)
-        return
-
-    if flag.exists():
-        flag.unlink()
-        logger.info("Removed stale ingest flag (collection empty).")
-
-    result = _run_csv_ingest()
-    if result["chunks"] > 0:
-        flag.touch()
-        logger.info("Ingest complete: %s rows from CSV", result["chunks"])
-    else:
-        logger.warning(
-            "Ingest produced 0 rows. Add `*.csv` (e.g. All_RAG_Chunks.csv) to %s and restart (or DELETE /reset).",
-            config.CHUNKS_DATA_DIR,
-        )
+            logger.warning(
+                "[%s] Ingest produced 0 rows. Add `*.csv` under %s and restart (or DELETE /reset).",
+                branch,
+                config.chunks_dir_for_branch(branch),
+            )
 
 
 def main() -> int:

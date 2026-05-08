@@ -6,10 +6,10 @@ import styled from "styled-components";
 
 const Article = styled.article`
   border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
   padding: 1rem;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  box-shadow: var(--shadow-raised);
 `;
 
 const Top = styled.div`
@@ -26,9 +26,9 @@ const Rank = styled.div`
   align-items: center;
   justify-content: center;
   border-radius: 0.5rem;
-  background: #eff6ff;
+  background: var(--rank-bg);
   font-weight: 700;
-  color: #1e3a8a;
+  color: var(--branch-accent);
 `;
 
 const MetaBlock = styled.div`
@@ -44,7 +44,7 @@ const Title = styled.h3`
   -webkit-line-clamp: 2;
   line-clamp: 2;
   font-weight: 700;
-  color: #172554;
+  color: var(--text-primary);
 `;
 
 const MetaLine = styled.div`
@@ -52,7 +52,7 @@ const MetaLine = styled.div`
   display: flex;
   justify-content: space-between;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-muted);
 `;
 
 const Quote = styled.p`
@@ -60,7 +60,7 @@ const Quote = styled.p`
   font-size: 0.875rem;
   font-style: italic;
   line-height: 1.5rem;
-  color: #334155;
+  color: var(--text-secondary);
 `;
 
 const Footer = styled.div`
@@ -73,7 +73,7 @@ const Footer = styled.div`
 
 const Score = styled.span`
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-muted);
 `;
 
 const MetaLink = styled.a`
@@ -81,15 +81,15 @@ const MetaLink = styled.a`
   align-items: center;
   gap: 0.5rem;
   border-radius: 0.5rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #1e3a8a;
+  color: var(--link-accent);
   text-decoration: none;
 
   &:hover {
-    background: #f8fafc;
+    background: var(--control-hover);
   }
 `;
 

@@ -18,10 +18,10 @@ const Circle = styled.div<{ $tone: Tone }>`
   ${({ $tone }) =>
     $tone === "user"
       ? css`
-          background: #1e3a8a;
+          background: var(--avatar-user);
         `
       : css`
-          background: #020617;
+          background: var(--avatar-assistant);
         `}
 `;
 

@@ -1,15 +1,19 @@
 "use client";
 
-import { Icon } from "@/components/atoms/Icon";
 import { NavTabButton } from "@/components/molecules/NavTabButton";
 import { bp } from "@/lib/breakpoints";
 import NextImage from "next/image";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 
-const TABS = ["채팅", "교범 검색", "출처 문서", "대시보드"] as const;
+const TABS = ["채팅", "교범 검색", "출처 문서"] as const;
 
-const Shell = styled.header`
-  background: linear-gradient(to right, #020617, #172554, #0f172a);
+const Shell = styled.header<{ $branch: "army" | "navy" | "air_force" }>`
+  background: ${({ $branch }) =>
+    $branch === "army"
+      ? "linear-gradient(to right, #052e16, #166534, #14532d)"
+      : $branch === "navy"
+        ? "linear-gradient(to right, #020617, #1e40af, #1e293b)"
+        : "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"};
   color: #fff;
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
 `;
@@ -29,9 +33,14 @@ const Inner = styled.div`
   }
 `;
 
-const Brand = styled.div`
+const Brand = styled.button`
   display: flex;
   min-width: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
   align-items: center;
   gap: 0.25rem;
   border-bottom: 1px solid rgb(255 255 255 / 0.1);
@@ -56,6 +65,29 @@ const Brand = styled.div`
   @media (min-width: ${bp.xl}) {
     min-width: 18rem;
   }
+
+
+  &:hover {
+    text-decoration: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #bfdbfe;
+    outline-offset: -4px;
+  }
+`;
+
+
+const BrandHint = styled.span`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 `;
 
 const LogoBox = styled.div`
@@ -165,71 +197,58 @@ const Actions = styled.div`
   }
 `;
 
-const ProjectButton = styled.button`
-  display: flex;
-  min-width: 0;
-  max-width: min(100%, 14rem);
-  align-items: center;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgb(255 255 255 / 0.15);
-  background: rgb(255 255 255 / 0.05);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  font-size: 0.75rem;
-  color: #e0f2fe;
-  cursor: pointer;
-
-  @media (min-width: ${bp.sm}) {
-    max-width: none;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-  }
-`;
-
-const ProjectLabel = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`;
-
-const Chevron = styled.span`
-  flex-shrink: 0;
-`;
-
-const Avatar = styled.div`
-  display: flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #334155;
-
-  @media (min-width: ${bp.sm}) {
-    height: 2.75rem;
-    width: 2.75rem;
-    font-size: 1rem;
-  }
-`;
-
 type AppHeaderProps = {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  projectLabel?: string;
+  branch: "army" | "navy" | "air_force";
+  onBranchChange: (branch: "army" | "navy" | "air_force") => void;
 };
 
-export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG · Ollama" }: AppHeaderProps) {
+const BranchTabs = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const BranchButton = styled.button<{ $active: boolean }>`
+  border: 1px solid rgb(255 255 255 / 0.22);
+  background: ${({ $active }) => ($active ? "rgb(255 255 255 / 0.18)" : "transparent")};
+  color: #fff;
+  padding: 0.45rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 800;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+
+  ${({ $active }) =>
+    $active
+      ? css`
+          border-color: rgb(255 255 255 / 0.55);
+          box-shadow: 0 0 0 1px rgb(255 255 255 / 0.2), 0 0 0 3px var(--branch-accent);
+          background: rgb(255 255 255 / 0.24);
+        `
+      : ""}
+
+  &:hover {
+    background: rgb(255 255 255 / 0.12);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--branch-accent);
+    outline-offset: 2px;
+  }
+`;
+
+function branchLabel(id: "army" | "navy" | "air_force") {
+  return id === "army" ? "육군" : id === "navy" ? "해군" : "공군";
+}
+
+export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: AppHeaderProps) {
   return (
-    <Shell>
+    <Shell $branch={branch}>
       <Inner>
-        <Brand>
+        <Brand type="button" onClick={() => onTabChange("채팅")} aria-label="채팅 화면으로 이동">
           <LogoBox>
             <LogoImage
               src="/header-emblem.png"
@@ -240,8 +259,9 @@ export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG
             />
           </LogoBox>
           <TitleBlock>
-            <Title>DoctrineRAG</Title>
+            <Title>DOCTOR</Title>
           </TitleBlock>
+          <BrandHint>채팅으로 이동</BrandHint>
         </Brand>
 
         <Nav aria-label="주 메뉴">
@@ -251,12 +271,13 @@ export function AppHeader({ activeTab, onTabChange, projectLabel = "Doctrine RAG
         </Nav>
 
         <Actions>
-          <ProjectButton type="button">
-            <Icon name="shield" size={18} />
-            <ProjectLabel>{projectLabel}</ProjectLabel>
-            <Chevron>⌄</Chevron>
-          </ProjectButton>
-          <Avatar>DR</Avatar>
+          <BranchTabs aria-label="군 선택">
+            {(["army", "navy", "air_force"] as const).map((b) => (
+              <BranchButton key={b} type="button" $active={b === branch} onClick={() => onBranchChange(b)}>
+                {branchLabel(b)}
+              </BranchButton>
+            ))}
+          </BranchTabs>
         </Actions>
       </Inner>
     </Shell>

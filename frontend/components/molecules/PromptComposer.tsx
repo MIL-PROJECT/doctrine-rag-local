@@ -12,10 +12,10 @@ const InputRow = styled.div`
   display: flex;
   align-items: center;
   border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--branch-accent) 22%, var(--border));
+  background: var(--input-bg);
   padding: 0.75rem 1rem;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+  box-shadow: var(--shadow-raised);
 `;
 
 const TextInput = styled.input`
@@ -25,9 +25,10 @@ const TextInput = styled.input`
   background: transparent;
   outline: none;
   font-size: 1rem;
+  color: var(--text-primary);
 
   &::placeholder {
-    color: #94a3b8;
+    color: var(--text-subtle);
   }
 
   &:disabled {
@@ -44,9 +45,13 @@ const SendButton = styled.button`
   justify-content: center;
   border: none;
   border-radius: 9999px;
-  background: #1e3a8a;
+  background: var(--send-bg);
   color: #fff;
   cursor: pointer;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
 
   &:disabled {
     cursor: not-allowed;
@@ -57,7 +62,7 @@ const SendButton = styled.button`
 const Hint = styled.p`
   margin: 0.75rem 0 0;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 `;
 
 type PromptComposerProps = {
@@ -88,7 +93,7 @@ export function PromptComposer({
           <Icon name="send" size={20} />
         </SendButton>
       </InputRow>
-      <Hint>※ 답변은 로컬 교리 코퍼스 RAG 결과입니다. 공식 원문·작전 문서와 반드시 대조하세요.</Hint>
+      <Hint>※ 자동 모드에서는 질문 유형에 따라 교리 RAG 또는 일반 채팅으로 응답합니다.</Hint>
     </Form>
   );
 }

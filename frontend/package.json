@@ -6,7 +6,9 @@
     "dev": "next dev -H 0.0.0.0",
     "dev:local": "next dev",
     "dev:network": "next dev -H 0.0.0.0 -p 3000",
+    "clean": "node scripts/clean-next.js",
     "build": "next build",
+    "build:clean": "npm run clean && npm run build",
     "start": "next start -H 0.0.0.0",
     "start:network": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint"

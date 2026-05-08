@@ -5,7 +5,7 @@ services:
       context: ./backend
     container_name: doctrine-rag-ollama-backend
     command: >
-      sh -c "uvicorn main:app --host 0.0.0.0 --port 8000"
+      sh -c "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
@@ -16,6 +16,8 @@ services:
     env_file:
       - .env
     volumes:
+      # 호스트의 backend 소스를 그대로 쓰면 코드 수정이 이미지 재빌드 없이 반영됩니다.
+      - ./backend:/app
       - ./backend/chroma_db:/app/chroma_db
       - ./backend/data:/app/data
       - hf_cache:/app/.cache/huggingface
@@ -34,6 +36,7 @@ services:
       context: ./frontend
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_TOP_K_MAX: ${NEXT_PUBLIC_TOP_K_MAX:-20}
     container_name: doctrine-rag-ollama-frontend
     environment:
       BACKEND_INTERNAL_URL: http://backend:8000

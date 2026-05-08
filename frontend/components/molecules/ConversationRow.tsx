@@ -11,21 +11,23 @@ const Row = styled.button<{ $active: boolean }>`
   padding: 0.75rem 1rem;
   text-align: left;
   font-size: 0.875rem;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 
   ${({ $active }) =>
     $active
       ? css`
-          background: #1e3a8a;
-          color: #fff;
-          box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+          background: var(--conversation-active-bg);
+          color: var(--conversation-active-fg);
+          border: 1px solid var(--conversation-active-border);
+          box-shadow: var(--shadow-raised);
         `
       : css`
-          color: #334155;
+          color: var(--text-secondary-contrast);
+          border: 1px solid transparent;
           &:hover {
-            background: #f1f5f9;
+            background: var(--surface-hover);
           }
         `}
 `;
@@ -42,10 +44,10 @@ const Time = styled.span<{ $active: boolean }>`
   ${({ $active }) =>
     $active
       ? css`
-          color: #dbeafe;
+          color: var(--conversation-time-active);
         `
       : css`
-          color: #94a3b8;
+          color: var(--text-muted);
         `}
 `;
 
