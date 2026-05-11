@@ -12,7 +12,7 @@ const Row = styled.div<{ $divided: boolean }>`
   ${({ $divided }) =>
     $divided &&
     css`
-      border-top: 1px solid #e2e8f0;
+      border-top: 1px solid var(--border);
       padding-top: 2rem;
     `}
 `;
@@ -32,12 +32,12 @@ const Meta = styled.div`
 const Role = styled.p`
   margin: 0;
   font-weight: 700;
-  color: #172554;
+  color: var(--link-accent);
 `;
 
 const Time = styled.span`
   font-size: 0.875rem;
-  color: #94a3b8;
+  color: var(--text-muted);
 `;
 
 const Content = styled.p`
@@ -45,7 +45,7 @@ const Content = styled.p`
   white-space: pre-wrap;
   font-size: 1.125rem;
   line-height: 2rem;
-  color: #1e293b;
+  color: var(--text-primary);
 `;
 
 type ChatMessageBlockProps = {
@@ -62,7 +62,7 @@ export function ChatMessageBlock({ message, index }: ChatMessageBlockProps) {
       <Body>
         <Meta>
           <Role>{message.role === "user" ? "사용자" : "어시스턴트"}</Role>
-          <Time>{message.time}</Time>
+          <Time suppressHydrationWarning>{message.time}</Time>
         </Meta>
         <Content>{message.content}</Content>
       </Body>

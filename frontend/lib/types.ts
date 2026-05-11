@@ -21,6 +21,9 @@ export type ChatMessage = {
   time: string;
 };
 
+export type ChatMode = "auto" | "rag" | "general";
+export type ChatResponseMode = "rag" | "general";
+
 export type BackendSource = {
   source?: string | null;
   chunk_index?: number | string | null;
@@ -45,18 +48,22 @@ export type OllamaHealth = {
 export type HealthPayload = {
   status?: string;
   api?: string;
-  vector_db?: { documents?: number; collection?: string; path?: string };
   chroma_documents?: number;
+  vector_db?: { documents?: number; collection?: string; path?: string };
   ollama?: OllamaHealth;
   ollama_reachable?: boolean;
   ollama_model?: string;
   ingest_flag?: boolean;
-  /** Preprocessed chunk CSV directory (backend env CHUNKS_DATA_DIR) */
+  ingest_mode?: string;
   chunks_data_dir?: string;
+  top_k_max?: number;
 };
 
 export type ChatApiResponse = {
+  mode?: ChatResponseMode;
+  branch?: "army" | "navy" | "air_force";
   answer: string;
-  citations?: BackendSource[];
-  related_topics?: string[];
+  sources?: BackendSource[];
+  route_reason?: string;
+  route_confidence?: number;
 };

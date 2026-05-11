@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from pathlib import Path
 from typing import Any
 
 import chromadb
@@ -22,26 +21,31 @@ _client = chromadb.PersistentClient(
     path=str(config.CHROMA_DIR),
     settings=Settings(anonymized_telemetry=False),
 )
-_collection = _client.get_or_create_collection(
-    name=config.COLLECTION_NAME,
-    metadata={"hnsw:space": "cosine"},
-)
+_collections: dict[str, Any] = {}
 
 
-def collection_count() -> int:
-    return _collection.count()
+def _get_collection(name: str):
+    col = _collections.get(name)
+    if col is None:
+        col = _client.get_or_create_collection(name=name, metadata={"hnsw:space": "cosine"})
+        _collections[name] = col
+    return col
 
 
-def collection_stats() -> dict[str, Any]:
+def collection_count(collection_name: str | None = None) -> int:
+    """기본 컬렉션 또는 지정 컬렉션 문서 수."""
+    name = collection_name or config.COLLECTION_NAME
+    return _get_collection(name).count()
+
+
+def collection_stats(collection_name: str | None = None) -> dict[str, Any]:
     """헬스/모니터링용 — 컬렉션명·문서 수·설정상 Chroma 경로 표시."""
-    return {
-        "collection": config.COLLECTION_NAME,
-        "documents": collection_count(),
-        "path": config.CHROMA_PATH_DISPLAY,
-    }
+    name = collection_name or config.COLLECTION_NAME
+    return {"collection": name, "documents": collection_count(name), "path": config.CHROMA_PATH_DISPLAY}
 
 
 def add_chunk_records(
+    collection_name: str,
     documents: list[str],
     embeddings: list[list[float]],
     metadatas: list[dict[str, Any]],
@@ -53,7 +57,7 @@ def add_chunk_records(
     if len(documents) != len(embeddings) or len(documents) != len(metadatas):
         raise ValueError("documents, embeddings, metadatas length mismatch.")
     id_list = ids if ids is not None and len(ids) == len(documents) else [str(uuid.uuid4()) for _ in documents]
-    _collection.add(
+    _get_collection(collection_name).add(
         ids=id_list,
         documents=documents,
         embeddings=embeddings,
@@ -62,12 +66,12 @@ def add_chunk_records(
     return len(documents)
 
 
-def search(question_embedding: list[float], top_k: int) -> list[dict[str, Any]]:
-    n = collection_count()
+def search(collection_name: str, question_embedding: list[float], top_k: int) -> list[dict[str, Any]]:
+    n = collection_count(collection_name)
     if n == 0:
         return []
     k = min(max(top_k, 1), n)
-    res = _collection.query(
+    res = _get_collection(collection_name).query(
         query_embeddings=[question_embedding],
         n_results=k,
     )
@@ -89,19 +93,21 @@ def search(question_embedding: list[float], top_k: int) -> list[dict[str, Any]]:
     return out
 
 
-def reset_collection() -> None:
-    global _collection
+def reset_collection(collection_name: str | None = None) -> None:
+    """컬렉션 비우기 (지정 없으면 기본 컬렉션)."""
+    name = collection_name or config.COLLECTION_NAME
     try:
-        _client.delete_collection(config.COLLECTION_NAME)
+        _client.delete_collection(name)
     except Exception:
         logger.warning("delete_collection failed or missing", exc_info=True)
-    _collection = _client.get_or_create_collection(
-        name=config.COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"},
-    )
+    _collections.pop(name, None)
+    _get_collection(name)
 
 
-def remove_ingest_flag() -> None:
-    p = Path(config.INGEST_FLAG_PATH)
-    if p.exists():
-        p.unlink()
+def remove_ingest_flag(path) -> None:
+    """기존 호환: flag 파일 삭제(경로는 호출자가 지정)."""
+    try:
+        if path.exists():
+            path.unlink()
+    except Exception:
+        logger.warning("remove_ingest_flag failed", exc_info=True)

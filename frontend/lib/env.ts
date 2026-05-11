@@ -9,3 +9,9 @@ export function getInternalApiBaseUrl(): string {
   if (internal) return internal.replace(/\/$/, "");
   return getPublicApiBaseUrl();
 }
+
+/** `/chat`·`/api/search` 등에서 top_k 상한 (백엔드 TOP_K_MAX와 맞추면 됨) */
+export function getTopKMaxForRoutes(): number {
+  const n = Number(process.env.NEXT_PUBLIC_TOP_K_MAX);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 20;
+}
