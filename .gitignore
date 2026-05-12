@@ -3,6 +3,8 @@ backend/chroma_db/*
 !backend/chroma_db/.gitkeep
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/logs/*
+!backend/logs/.gitkeep
 **/__pycache__
 *.pyc
 frontend/node_modules

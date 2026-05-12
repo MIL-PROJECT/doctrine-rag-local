@@ -1,0 +1,49 @@
+{
+  "agents": [
+    {
+      "id": "army",
+      "name": "ARMY Doctrine Agent",
+      "description": "육군 교리 전문 에이전트 — FM 교범 9종 기반 지상작전 자문",
+      "skills": ["doctrine_qa", "land_operations", "targeting_d3a"],
+      "branch": "army",
+      "collection": "army_doctrine",
+      "documents": 15274,
+      "endpoint": "/chat",
+      "version": "1.0.0",
+      "specialties": ["D3A 표적처리", "MDMP", "기동작전", "화력운용"]
+    },
+    {
+      "id": "navy",
+      "name": "NAVY Doctrine Agent",
+      "description": "해군 교리 전문 에이전트 — JP 교범 3종 기반 해상작전 자문",
+      "skills": ["doctrine_qa", "maritime_operations", "joint_operations"],
+      "branch": "navy",
+      "collection": "navy_doctrine",
+      "documents": 8483,
+      "endpoint": "/chat",
+      "version": "1.0.0",
+      "specialties": ["해상작전", "함대운용", "해양통제", "합동작전 원칙"]
+    },
+    {
+      "id": "air_force",
+      "name": "AIR FORCE Doctrine Agent",
+      "description": "공군 교리 전문 에이전트 — AFDP 교범 10종 기반 항공작전 자문",
+      "skills": ["doctrine_qa", "air_operations", "targeting_f2t2ea", "airspace_control"],
+      "branch": "air_force",
+      "collection": "airforce_doctrine",
+      "documents": 2519,
+      "endpoint": "/chat",
+      "version": "1.0.0",
+      "specialties": ["F2T2EA 표적처리", "공역통제", "JFACC", "항공전력 운용"]
+    },
+    {
+      "id": "supervisor",
+      "name": "Joint Operations Supervisor",
+      "description": "합동작전 Lead Agent — 질문 분석 후 3군 에이전트에 Task 위임 및 답변 종합",
+      "skills": ["task_routing", "answer_synthesis", "audit_logging"],
+      "branch": "joint",
+      "version": "1.0.0",
+      "delegates_to": ["army", "navy", "air_force"]
+    }
+  ]
+}
