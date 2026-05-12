@@ -3,11 +3,13 @@
 import { DoctrineRagTemplate } from "@/components/templates/DoctrineRagTemplate";
 import { getCurrentUser, logout, type DoctrineUser } from "@/lib/auth";
 import { mapBackendSourcesToRows } from "@/lib/map-backend-source";
+import { getTopKMaxForRoutes } from "@/lib/env";
 import type {
   BackendSource,
   BranchId,
   ChatMessage,
   ChatMode,
+  ChatPipeline,
   ChatResponseMode,
   ChatSourceRow,
   Conversation,
@@ -25,6 +27,7 @@ type ChatSession = {
   sources: ChatSourceRow[];
   chatTitle: string;
   lastResponseMode: ChatResponseMode | null;
+  chatPipeline: ChatPipeline;
 };
 
 function timeLabel() {
@@ -52,6 +55,7 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("auto");
   const [lastResponseMode, setLastResponseMode] = useState<ChatResponseMode | null>(null);
+  const [chatPipeline, setChatPipeline] = useState<ChatPipeline>("standard");
   const [searchQuery, setSearchQuery] = useState("");
   const [submittedSearchQuery, setSubmittedSearchQuery] = useState("");
   const [searchSearched, setSearchSearched] = useState(false);
@@ -107,9 +111,10 @@ export default function ChatPage() {
         sources,
         chatTitle,
         lastResponseMode,
+        chatPipeline,
       },
     }));
-  }, [activeConversationId, messages, sources, chatTitle, lastResponseMode]);
+  }, [activeConversationId, messages, sources, chatTitle, lastResponseMode, chatPipeline]);
 
   async function handleChatSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,6 +150,45 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: "assistant", content: "", time: assistantTime }]);
 
     try {
+      if (chatPipeline === "a2a") {
+        const cap = getTopKMaxForRoutes();
+        const top_k = Math.min(10, cap);
+        const res = await fetch("/api/a2a/task", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, top_k }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          detail?: string;
+          final_answer?: string;
+          all_sources?: BackendSource[];
+        };
+        if (!res.ok) {
+          const msg = typeof data.detail === "string" ? data.detail : `A2A 요청 실패 (${res.status})`;
+          setLastResponseMode(null);
+          setSources([]);
+          setMessages((prev) => {
+            const n = [...prev];
+            n[n.length - 1] = { role: "assistant", content: msg, time: timeLabel() };
+            return n;
+          });
+          return;
+        }
+        const answer = String(data.final_answer ?? "").trim();
+        setLastResponseMode("a2a");
+        setSources(mapBackendSourcesToRows(data.all_sources ?? []));
+        setMessages((prev) => {
+          const n = [...prev];
+          n[n.length - 1] = {
+            role: "assistant",
+            content: answer || "응답 본문이 비어 있습니다.",
+            time: assistantTime,
+          };
+          return n;
+        });
+        return;
+      }
+
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -304,6 +348,7 @@ export default function ChatPage() {
     setSources([]);
     setLastResponseMode(null);
     setInput("");
+    setChatPipeline("standard");
     setMessages([
       {
         role: "assistant",
@@ -324,6 +369,7 @@ export default function ChatPage() {
     setSources(snap.sources);
     setChatTitle(snap.chatTitle);
     setLastResponseMode(snap.lastResponseMode);
+    setChatPipeline(snap.chatPipeline ?? "standard");
     setInput("");
   }
 
@@ -346,6 +392,8 @@ export default function ChatPage() {
       onNewChat={handleNewChat}
       chatMode={chatMode}
       onChatModeChange={setChatMode}
+      chatPipeline={chatPipeline}
+      onChatPipelineChange={setChatPipeline}
       lastResponseMode={lastResponseMode}
       searchQuery={searchQuery}
       submittedSearchQuery={submittedSearchQuery}

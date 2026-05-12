@@ -2,7 +2,7 @@
 
 import { ChatMessageBlock } from "@/components/molecules/ChatMessageBlock";
 import { PromptComposer } from "@/components/molecules/PromptComposer";
-import type { ChatMessage, ChatMode, ChatResponseMode } from "@/lib/types";
+import type { ChatMessage, ChatMode, ChatPipeline, ChatResponseMode } from "@/lib/types";
 import { FormEvent, useEffect, useRef } from "react";
 import styled from "styled-components";
 
@@ -86,6 +86,11 @@ const ModeSelect = styled.select`
   font-weight: 600;
   color: var(--text-secondary-contrast);
   background: var(--input-bg);
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
 `;
 
 const ModeBadge = styled.p`
@@ -112,6 +117,8 @@ type ChatWorkspaceProps = {
   mode: ChatMode;
   onModeChange: (mode: ChatMode) => void;
   lastResponseMode: ChatResponseMode | null;
+  pipeline: ChatPipeline;
+  onPipelineChange: (p: ChatPipeline) => void;
 };
 
 export function ChatWorkspace({
@@ -125,6 +132,8 @@ export function ChatWorkspace({
   mode,
   onModeChange,
   lastResponseMode,
+  pipeline,
+  onPipelineChange,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,7 +146,22 @@ export function ChatWorkspace({
       <Toolbar>
         <Title>{title}</Title>
         <ToolButtons>
-          <ModeSelect value={mode} onChange={(e) => onModeChange(e.target.value as ChatMode)} aria-label="응답 모드">
+          <ModeSelect
+            value={pipeline}
+            onChange={(e) => onPipelineChange(e.target.value as ChatPipeline)}
+            aria-label="채팅 파이프라인"
+            title="표준: 단일 군 스트리밍 · A2A: 슈퍼바이저가 키워드로 군을 고른 뒤 합성"
+          >
+            <option value="standard">표준 (스트림)</option>
+            <option value="a2a">A2A 합동</option>
+          </ModeSelect>
+          <ModeSelect
+            value={mode}
+            onChange={(e) => onModeChange(e.target.value as ChatMode)}
+            aria-label="응답 모드"
+            disabled={pipeline === "a2a"}
+            title={pipeline === "a2a" ? "A2A는 군별 에이전트가 항상 교리 RAG로 응답합니다." : undefined}
+          >
             <option value="auto">자동</option>
             <option value="rag">교리 RAG</option>
             <option value="general">일반 채팅</option>
@@ -157,11 +181,24 @@ export function ChatWorkspace({
         {!busy && lastResponseMode === "general" && (
           <ModeBadge>일반 채팅 응답 · 교리 문서 출처는 사용되지 않았습니다.</ModeBadge>
         )}
+        {!busy && lastResponseMode === "a2a" && (
+          <ModeBadge>A2A 슈퍼바이저 응답 · 다수 군 교리 출처가 병합되었을 수 있습니다.</ModeBadge>
+        )}
         <div ref={messagesEndRef} />
       </MessageViewport>
 
       <ComposerWrap>
-        <PromptComposer value={input} onChange={onInputChange} onSubmit={onSubmit} disabled={busy} />
+        <PromptComposer
+          value={input}
+          onChange={onInputChange}
+          onSubmit={onSubmit}
+          disabled={busy}
+          hint={
+            pipeline === "a2a"
+              ? "※ A2A: 질문에 육·해·공 키워드가 있으면 해당 군만, 없으면 3군 병렬 조회 후 합성합니다. 응답은 스트림이 아닌 한 번에 표시됩니다."
+              : "※ 자동 모드에서는 질문 유형에 따라 교리 RAG 또는 일반 채팅으로 응답합니다."
+          }
+        />
       </ComposerWrap>
     </Section>
   );

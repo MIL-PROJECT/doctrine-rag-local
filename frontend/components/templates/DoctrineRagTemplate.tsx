@@ -8,7 +8,7 @@ import { DoctrineSearchWorkspace } from "@/components/organisms/DoctrineSearchWo
 import { SourceDocumentsWorkspace } from "@/components/organisms/SourceDocumentsWorkspace";
 import { bp } from "@/lib/breakpoints";
 import type { DoctrineUser } from "@/lib/auth";
-import type { BranchId, ChatMessage, ChatMode, ChatResponseMode, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
+import type { BranchId, ChatMessage, ChatMode, ChatPipeline, ChatResponseMode, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
 import { FormEvent } from "react";
 import styled from "styled-components";
 
@@ -233,6 +233,8 @@ type DoctrineRagTemplateProps = {
   onNewChat?: () => void;
   chatMode: ChatMode;
   onChatModeChange: (mode: ChatMode) => void;
+  chatPipeline: ChatPipeline;
+  onChatPipelineChange: (p: ChatPipeline) => void;
   lastResponseMode: ChatResponseMode | null;
   searchQuery: string;
   submittedSearchQuery: string;
@@ -268,6 +270,8 @@ export function DoctrineRagTemplate({
   onNewChat,
   chatMode,
   onChatModeChange,
+  chatPipeline,
+  onChatPipelineChange,
   lastResponseMode,
   searchQuery,
   submittedSearchQuery,
@@ -312,6 +316,8 @@ export function DoctrineRagTemplate({
             mode={chatMode}
             onModeChange={onChatModeChange}
             lastResponseMode={lastResponseMode}
+            pipeline={chatPipeline}
+            onPipelineChange={onChatPipelineChange}
           />
         ) : activeTab === "교범 검색" ? (
           <DoctrineSearchWorkspace

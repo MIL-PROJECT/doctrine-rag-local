@@ -23,7 +23,10 @@ export type ChatMessage = {
 };
 
 export type ChatMode = "auto" | "rag" | "general";
-export type ChatResponseMode = "rag" | "general";
+/** 단일 채팅 스트림 응답 모드 · A2A는 슈퍼바이저 합성 응답 */
+export type ChatResponseMode = "rag" | "general" | "a2a";
+
+export type ChatPipeline = "standard" | "a2a";
 export type BranchId = "common" | "army" | "navy" | "air_force";
 
 export type BackendSource = {

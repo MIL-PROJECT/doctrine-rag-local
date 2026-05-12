@@ -84,6 +84,8 @@ type PromptComposerProps = {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   disabled?: boolean;
   placeholder?: string;
+  /** 기본: 자동 모드 안내 */
+  hint?: string;
 };
 
 export function PromptComposer({
@@ -92,6 +94,7 @@ export function PromptComposer({
   onSubmit,
   disabled,
   placeholder = "교리 관련 질문을 입력하세요...",
+  hint = "※ 자동 모드에서는 질문 유형에 따라 교리 RAG 또는 일반 채팅으로 응답합니다.",
 }: PromptComposerProps) {
   return (
     <Form onSubmit={onSubmit}>
@@ -106,7 +109,7 @@ export function PromptComposer({
           <Icon name="send" size={20} />
         </SendButton>
       </InputRow>
-      <Hint>※ 자동 모드에서는 질문 유형에 따라 교리 RAG 또는 일반 채팅으로 응답합니다.</Hint>
+      <Hint>{hint}</Hint>
     </Form>
   );
 }
