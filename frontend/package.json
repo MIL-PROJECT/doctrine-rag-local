@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -H 0.0.0.0",
+    "dev": "npm run clean && next dev -H 0.0.0.0",
+    "dev:quick": "next dev -H 0.0.0.0",
     "dev:local": "next dev",
     "dev:network": "next dev -H 0.0.0.0 -p 3000",
     "clean": "node scripts/clean-next.js",
@@ -13,11 +14,18 @@
     "start:network": "next start -H 0.0.0.0 -p 3000",
     "lint": "next lint"
   },
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=9"
+  },
   "dependencies": {
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "styled-components": "^6.1.13"
+  },
+  "optionalDependencies": {
+    "@next/swc-win32-x64-msvc": "14.2.5"
   },
   "devDependencies": {
     "@types/node": "20.14.10",

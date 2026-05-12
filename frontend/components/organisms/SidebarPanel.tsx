@@ -2,9 +2,19 @@
 
 import { Icon } from "@/components/atoms/Icon";
 import { ConversationRow } from "@/components/molecules/ConversationRow";
+import type { DoctrineUser } from "@/lib/auth";
 import type { Conversation, HealthPayload } from "@/lib/types";
 import { useState } from "react";
 import styled from "styled-components";
+
+function userDisplayInitials(user: DoctrineUser): string {
+  const name = user.name.trim();
+  if (name.length >= 2) return name.slice(0, 2);
+  if (name.length === 1) return `${name}${user.id.trim().charAt(0) || ""}`.slice(0, 2);
+  const id = user.id.trim();
+  if (id.length >= 2) return id.slice(0, 2).toUpperCase();
+  return id.charAt(0).toUpperCase() || "?";
+}
 
 const Aside = styled.aside`
   border-right: none;
@@ -16,6 +26,124 @@ const Aside = styled.aside`
 
 const NewChatWrap = styled.div`
   padding: 1.25rem;
+  padding-bottom: 0.75rem;
+`;
+
+const UserCard = styled.div`
+  margin: 0 1.25rem 1.1rem;
+  position: relative;
+  border-radius: 1rem;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-muted) 100%);
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 36px -16px rgb(15 23 42 / 0.2);
+`;
+
+const UserCardAccent = styled.div`
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--branch-accent) 0%, rgb(148 163 184 / 0.35) 100%);
+`;
+
+const UserCardInner = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.9rem 1rem 1.05rem;
+`;
+
+const UserAvatar = styled.div`
+  flex-shrink: 0;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #fff;
+  background: var(--branch-accent);
+  box-shadow:
+    0 4px 14px -3px rgb(15 23 42 / 0.35),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.22);
+`;
+
+const UserCardMain = styled.div`
+  min-width: 0;
+  flex: 1;
+`;
+
+const UserCardLabel = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.2rem;
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+
+  svg {
+    color: var(--branch-accent);
+    opacity: 0.95;
+  }
+`;
+
+const UserName = styled.p`
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+`;
+
+const UserDetailRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    color: var(--branch-accent);
+    opacity: 0.88;
+  }
+
+  span {
+    min-width: 0;
+  }
+`;
+
+const UserDetailRowSecondary = styled(UserDetailRow)`
+  margin-top: 0.35rem;
+`;
+
+const UserIdPill = styled.div`
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.55rem;
+  max-width: 100%;
+  padding: 0.3rem 0.65rem;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: var(--rank-bg);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const NewChatButton = styled.button`
@@ -212,6 +340,28 @@ const SwitchWrap = styled.div`
   gap: 0.5rem;
 `;
 
+const LogoutButton = styled.button`
+  width: 100%;
+  margin-top: 0.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #b91c1c;
+  cursor: pointer;
+
+  &:hover {
+    background: #fee2e2;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #ef4444;
+    outline-offset: 2px;
+  }
+`;
+
 type SidebarPanelProps = {
   conversations: Conversation[];
   onSelectConversation?: (id: string) => void;
@@ -219,6 +369,8 @@ type SidebarPanelProps = {
   onNewChat?: () => void;
   darkMode: boolean;
   onDarkModeChange: (enabled: boolean) => void;
+  sessionUser: DoctrineUser | null;
+  onLogout: () => void;
 };
 
 export function SidebarPanel({
@@ -228,6 +380,8 @@ export function SidebarPanel({
   onNewChat,
   darkMode,
   onDarkModeChange,
+  sessionUser,
+  onLogout,
 }: SidebarPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const modelLabel = health?.ollama?.model ?? health?.ollama_model ?? "—";
@@ -242,6 +396,33 @@ export function SidebarPanel({
           새 채팅
         </NewChatButton>
       </NewChatWrap>
+
+      {sessionUser ? (
+        <UserCard aria-label="로그인 사용자 정보">
+          <UserCardAccent aria-hidden />
+          <UserCardInner>
+            <UserAvatar aria-hidden>{userDisplayInitials(sessionUser)}</UserAvatar>
+            <UserCardMain>
+              <UserCardLabel>
+                <Icon name="user" size={14} />
+                내 프로필
+              </UserCardLabel>
+              <UserName>{sessionUser.name}</UserName>
+              <UserDetailRow>
+                <Icon name="shield" size={15} />
+                <span>
+                  {sessionUser.rank} · {sessionUser.position}
+                </span>
+              </UserDetailRow>
+              <UserDetailRowSecondary>
+                <Icon name="file" size={15} />
+                <span>군번 {sessionUser.militaryNumber}</span>
+              </UserDetailRowSecondary>
+              <UserIdPill title={`ID ${sessionUser.id}`}>ID · {sessionUser.id}</UserIdPill>
+            </UserCardMain>
+          </UserCardInner>
+        </UserCard>
+      ) : null}
 
       <Section>
         <SectionTitle>최근 대화</SectionTitle>
@@ -306,6 +487,9 @@ export function SidebarPanel({
                 />
               </SwitchWrap>
             </ToggleRow>
+            <LogoutButton type="button" onClick={() => onLogout()}>
+              로그아웃
+            </LogoutButton>
           </SettingsPanel>
         ) : null}
       </FooterBlock>

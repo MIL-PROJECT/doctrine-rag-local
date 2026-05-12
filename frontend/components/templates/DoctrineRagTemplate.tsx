@@ -7,6 +7,7 @@ import { SidebarPanel } from "@/components/organisms/SidebarPanel";
 import { DoctrineSearchWorkspace } from "@/components/organisms/DoctrineSearchWorkspace";
 import { SourceDocumentsWorkspace } from "@/components/organisms/SourceDocumentsWorkspace";
 import { bp } from "@/lib/breakpoints";
+import type { DoctrineUser } from "@/lib/auth";
 import type { BranchId, ChatMessage, ChatMode, ChatResponseMode, ChatSourceRow, Conversation, HealthPayload } from "@/lib/types";
 import { FormEvent } from "react";
 import styled from "styled-components";
@@ -245,6 +246,8 @@ type DoctrineRagTemplateProps = {
   onSourcePdfSelect: (file: File) => void;
   darkMode: boolean;
   onDarkModeChange: (enabled: boolean) => void;
+  sessionUser: DoctrineUser | null;
+  onLogout: () => void;
 };
 
 export function DoctrineRagTemplate({
@@ -278,6 +281,8 @@ export function DoctrineRagTemplate({
   onSourcePdfSelect,
   darkMode,
   onDarkModeChange,
+  sessionUser,
+  onLogout,
 }: DoctrineRagTemplateProps) {
   return (
     <Page $darkMode={darkMode} $branch={branch}>
@@ -291,6 +296,8 @@ export function DoctrineRagTemplate({
           onNewChat={onNewChat}
           darkMode={darkMode}
           onDarkModeChange={onDarkModeChange}
+          sessionUser={sessionUser}
+          onLogout={onLogout}
         />
 
         {activeTab === "채팅" ? (
