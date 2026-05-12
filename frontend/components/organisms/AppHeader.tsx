@@ -20,7 +20,8 @@ const Shell = styled.header<{ $branch: "common" | "army" | "navy" | "air_force" 
           ? "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"
           : "linear-gradient(to right, #111827, #000000, #111827)"};
   color: #fff;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.35);
+  backdrop-filter: saturate(1.15) blur(10px);
 `;
 
 const Inner = styled.div`
@@ -46,8 +47,8 @@ const Brand = styled.button`
   color: inherit;
   cursor: pointer;
   text-align: left;
-  align-items: center;
-  gap: 0.25rem;
+  align-items: flex-start;
+  gap: 0.5rem;
   border-bottom: 1px solid rgb(255 255 255 / 0.1);
   padding: 0.75rem 1rem;
 
@@ -65,6 +66,7 @@ const Brand = styled.button`
     border-right: 1px solid rgb(255 255 255 / 0.1);
     padding-top: 0;
     padding-bottom: 0;
+    align-items: center;
   }
 
   @media (min-width: ${bp.xl}) {
@@ -123,6 +125,15 @@ const LogoImage = styled(NextImage)`
 
 const TitleBlock = styled.div`
   min-width: 0;
+`;
+
+const Subtitle = styled.p`
+  margin: 0.2rem 0 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.72);
 `;
 
 const Title = styled.h1`
@@ -224,7 +235,7 @@ const BranchButton = styled.button<{ $active: boolean }>`
   font-weight: 800;
   font-size: 0.875rem;
   cursor: pointer;
-  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
 
   ${({ $active }) =>
     $active
@@ -237,6 +248,7 @@ const BranchButton = styled.button<{ $active: boolean }>`
 
   &:hover {
     background: rgb(255 255 255 / 0.12);
+    transform: translateY(-1px);
   }
 
   &:focus-visible {
@@ -265,6 +277,7 @@ export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: Ap
           </LogoBox>
           <TitleBlock>
             <Title>DOCTOR</Title>
+            <Subtitle>Doctrine RAG</Subtitle>
           </TitleBlock>
           <BrandHint>채팅으로 이동</BrandHint>
         </Brand>

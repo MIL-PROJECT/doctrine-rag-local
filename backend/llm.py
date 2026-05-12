@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 
@@ -26,7 +26,7 @@ BASE_SYSTEM_PROMPT = """
 Use only retrieved doctrine evidence (RAG).
 If evidence is insufficient, say the selected doctrine dataset does not contain sufficient information.
 Do not hallucinate or invent facts.
-Answer in Korean with sections: 요약, 근거 (cite evidence numbers).
+Answer in Korean with sections: 요약, 근거 (각 인용은 [번호]와 해당 Evidence 블록의 표기용 제목을 함께 적을 것).
 Do not add a '한계' section header. If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps.
 Keep a calm, educational tone suitable for training materials.
 """.strip()
@@ -235,6 +235,124 @@ Answer in Korean using only the evidence above.""".strip()
     return str(content).strip()
 
 
+def iter_ollama_chat_stream(url: str, payload: dict[str, Any]) -> Iterator[tuple[str, str | None]]:
+    """
+    Ollama /api/chat NDJSON 스트림.
+    (\"delta\", 텍스트 조각), (\"error\", 메시지), 마지막에 (\"done\", None) 를 순서대로보냄.
+    """
+    body = {**payload, "stream": True}
+    headers = ollama_request_headers()
+    cumulative = ""
+    try:
+        with httpx.Client(timeout=_chat_timeout(), headers=headers) as client:
+            with client.stream("POST", url, json=body) as r:
+                if r.status_code >= 400:
+                    err_body = (r.read() or b"").decode("utf-8", errors="replace")[:800]
+                    logger.error("Ollama stream: HTTP %s — %s", r.status_code, err_body)
+                    yield ("error", USER_FACING_UNAVAILABLE)
+                    return
+                for raw in r.iter_lines():
+                    if not raw or not str(raw).strip():
+                        continue
+                    line = str(raw)
+                    if _looks_like_html(line):
+                        yield ("error", USER_FACING_UNAVAILABLE)
+                        return
+                    try:
+                        data = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(data, dict):
+                        continue
+                    err = data.get("error")
+                    if err:
+                        msg = err if isinstance(err, str) else str(err)
+                        lower = msg.lower()
+                        hint = (
+                            MODEL_NOT_FOUND_HINT
+                            if "not found" in lower or "unknown model" in lower or "pull" in lower
+                            else USER_FACING_UNAVAILABLE
+                        )
+                        yield ("error", hint)
+                        return
+                    if data.get("done"):
+                        break
+                    msg = data.get("message") or {}
+                    if not isinstance(msg, dict):
+                        continue
+                    piece = msg.get("content")
+                    if piece is None or piece == "":
+                        continue
+                    text = str(piece)
+                    if text.startswith(cumulative):
+                        delta = text[len(cumulative) :]
+                        cumulative = text
+                    else:
+                        delta = text
+                        cumulative = cumulative + delta
+                    if delta:
+                        yield ("delta", delta)
+    except httpx.TimeoutException:
+        logger.exception("Ollama stream: timeout")
+        yield ("error", USER_FACING_UNAVAILABLE)
+        return
+    except httpx.RequestError:
+        logger.exception("Ollama stream: connection failed (%s)", url)
+        yield ("error", USER_FACING_UNAVAILABLE)
+        return
+    yield ("done", None)
+
+
+def iter_stream_rag_answer(question: str, context: str, system_prompt: str | None = None) -> Iterator[tuple[str, str | None]]:
+    url = f"{config.OLLAMA_BASE_URL}/api/chat"
+    user_content = f"""[Question]
+{question}
+
+[Evidence from documents]
+{context}
+
+Answer in Korean using only the evidence above.""".strip()
+    payload: dict[str, Any] = {
+        "model": config.OLLAMA_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": (system_prompt or BASE_SYSTEM_PROMPT)},
+            {"role": "user", "content": user_content},
+        ],
+        "options": {
+            "temperature": 0.2,
+            "top_p": 0.9,
+            "num_predict": config.OLLAMA_MAX_TOKENS,
+        },
+    }
+    yield from iter_ollama_chat_stream(url, payload)
+
+
+def iter_stream_general_answer(question: str, branch: str | None = None) -> Iterator[tuple[str, str | None]]:
+    url = f"{config.OLLAMA_BASE_URL}/api/chat"
+    branch_hint = f"(selected_branch={branch})" if branch else ""
+    user_content = (
+        f"{branch_hint}\n"
+        f"User message: {question}\n\n"
+        "Please answer naturally in Korean: about 4-7 short sentences for casual/meta questions; "
+        "for doctrine-related questions, use a compact structure (핵심 요점 -> 간단한 설명 -> 한 줄 정리), under ~500 Korean characters when possible."
+    ).strip()
+    payload: dict[str, Any] = {
+        "model": config.OLLAMA_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": GENERAL_CHAT_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "options": {
+            "temperature": 0.4,
+            "top_p": 0.9,
+            "num_predict": config.OLLAMA_MAX_TOKENS,
+        },
+    }
+    yield from iter_ollama_chat_stream(url, payload)
+
+
 # Backward-compatible alias
 def generate_answer(question: str, context: str, system_prompt: str | None = None) -> str:
     return generate_rag_answer(question, context, system_prompt=system_prompt)
@@ -247,9 +365,8 @@ def generate_general_answer(question: str, branch: str | None = None) -> str:
     user_content = (
         f"{branch_hint}\n"
         f"User message: {question}\n\n"
-        "Please answer naturally in Korean with 12-16 sentences. "
-        "If the question is doctrine-related, include a short structured explanation (핵심 요점 -> 상세 설명 -> 정리) "
-        "and keep it educational."
+        "Please answer naturally in Korean: about 4-7 short sentences for casual/meta questions; "
+        "for doctrine-related questions, use a compact structure (핵심 요점 -> 간단한 설명 -> 한 줄 정리), under ~500 Korean characters when possible."
     ).strip()
 
     payload: dict[str, Any] = {

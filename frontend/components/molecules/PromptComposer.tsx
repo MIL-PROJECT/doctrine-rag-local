@@ -16,6 +16,14 @@ const InputRow = styled.div`
   background: var(--input-bg);
   padding: 0.75rem 1rem;
   box-shadow: var(--shadow-raised);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &:focus-within {
+    border-color: color-mix(in srgb, var(--branch-accent) 55%, var(--border));
+    box-shadow:
+      var(--shadow-raised),
+      0 0 0 2px color-mix(in srgb, var(--branch-accent) 28%, transparent);
+  }
 `;
 
 const TextInput = styled.input`
@@ -48,9 +56,14 @@ const SendButton = styled.button`
   background: var(--send-bg);
   color: var(--send-fg, #fff);
   cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
 
   &:hover:not(:disabled) {
     filter: brightness(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.96);
   }
 
   &:disabled {

@@ -30,7 +30,8 @@ const Toolbar = styled.div`
 const Title = styled.h2`
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
 `;
 
@@ -50,6 +51,7 @@ const ToolButton = styled.button`
   color: var(--text-secondary);
   background: var(--control-bg);
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 
   &:hover {
     background: var(--control-hover);

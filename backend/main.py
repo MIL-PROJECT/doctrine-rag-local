@@ -9,12 +9,13 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import config
 from llm import ollama_health_status
-from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest
+from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest, iter_chat_stream_ndjson
 import vector_store
 from a2a.supervisor import run_a2a_task
 from a2a.audit import read_recent
@@ -207,6 +208,33 @@ async def chat(body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@app.post("/chat/stream")
+async def chat_stream(body: ChatRequest):
+    """NDJSON 스트림 — 한 줄에 JSON 하나: meta → delta* → done. Ollama stream: true."""
+
+    def ndjson_bytes():
+        try:
+            for line in iter_chat_stream_ndjson(
+                body.question.strip(),
+                body.branch.strip() or "navy",
+                body.top_k,
+                body.mode,
+            ):
+                yield line.encode("utf-8")
+        except ValueError as e:
+            yield (json.dumps({"type": "error", "detail": str(e)}, ensure_ascii=False) + "\n").encode("utf-8")
+
+    return StreamingResponse(
+        ndjson_bytes(),
+        media_type="application/x-ndjson; charset=utf-8",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.delete("/reset")

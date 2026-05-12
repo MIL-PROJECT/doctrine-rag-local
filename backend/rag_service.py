@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from time import perf_counter
 import re
-from typing import Any
+from typing import Any, Iterator
 
 import config
 from chunk_table_loader import load_all_chunk_rows, normalize_chroma_meta
 from embeddings import embed_query, embed_texts
 from ingest_seed import ensure_ingested
-from llm import generate_general_answer, generate_rag_answer, load_branch_prompt
+from llm import (
+    USER_FACING_UNAVAILABLE,
+    generate_general_answer,
+    generate_rag_answer,
+    iter_stream_general_answer,
+    iter_stream_rag_answer,
+    load_branch_prompt,
+)
 from rag.query_router import _is_casual_backchannel, route_question, STRONG_DOCTRINE_INTENT
 import vector_store
 
@@ -323,6 +331,24 @@ def list_indexed_documents(branch: str) -> dict[str, Any]:
     return {"branch": branch, "indexed": True, "documents": items}
 
 
+def _evidence_display_title(meta: dict[str, Any]) -> str:
+    """답변 근거 괄호에 붙일 짧은 제목 — 메타의 문서명·장·절을 조합."""
+    title = (meta.get("document_title") or meta.get("document_short_title") or "").strip()
+    chapter = str(meta.get("chapter") or "").strip()
+    section = str(meta.get("section") or "").strip()
+    src = str(meta.get("source") or "").strip()
+    parts: list[str] = []
+    if title:
+        parts.append(title)
+    elif src:
+        parts.append(src)
+    if chapter:
+        parts.append(chapter)
+    if section and section != chapter:
+        parts.append(section)
+    return " — ".join(parts) if parts else (src or "출처 미상")
+
+
 def build_context(chunks: list[dict]) -> str:
     blocks: list[str] = []
     total_chars = 0
@@ -349,9 +375,11 @@ def build_context(chunks: list[dict]) -> str:
         else:
             text = raw_text
 
+        display_title = _evidence_display_title(meta)
         block = (
             f"""
 [Evidence {idx}]
+표기용 제목 (근거에 번호와 함께 반드시 이 이름을 적을 것): {display_title}
 {", ".join(cite_bits)}
 Chunk index: {meta.get("chunk_index", "unknown")}
 Text:
@@ -365,6 +393,99 @@ Text:
     return "\n\n".join(blocks)
 
 
+def _full_rag_system_prompt(branch: str) -> str:
+    return (
+        f"{load_branch_prompt(branch)}\n"
+        "- If evidence is sufficient: use sections 요약 / 근거. 요약은 4-6개 불릿, 각 불릿 1-2문장으로 핵심만.\n"
+        "- 전체 분량은 한국어 기준 대략 400~800자 전후로 유지 (길게 늘리지 말 것).\n"
+        "- 근거에서는 [증거번호]만 쓰지 말고, 각 블록 첫 줄의 「표기용 제목」과 동일한 문서·장·절 이름을 번호 직후에 붙일 것.\n"
+        "  예: 근거: [2] NWP 5-01 — 제3장 … / [4] FM 3-0 — …  (가능하면 한 줄에 번호+제목+핵심 한 문장)\n"
+        "- Do NOT include a separate '한계' section header.\n"
+        "- If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps (without a '한계' section)."
+    )
+
+
+def _prepare_rag_for_llm(
+    q: str,
+    branch: str,
+    top_k: int,
+    routed_chunks: list[dict[str, Any]] | None,
+    route_reason: str,
+    route_confidence: float,
+) -> dict[str, Any]:
+    """RAG에서 LLM 호출 직전까지. kind=early면 payload만 반환, kind=ready면 context·sources 등."""
+    collection = config.COLLECTION_MAP[branch]
+    if vector_store.collection_count(collection) == 0:
+        hint = (
+            f"No documents are indexed yet. Add preprocessed chunk CSV (e.g. All_RAG_Chunks.csv) under "
+            f"{config.chunks_dir_for_branch(branch)} and restart the backend (or DELETE /reset)."
+        )
+        return {
+            "kind": "early",
+            "payload": {
+                "mode": "rag",
+                "branch": branch,
+                "answer": hint,
+                "sources": [],
+                "route_reason": route_reason,
+                "route_confidence": route_confidence,
+            },
+        }
+
+    retrieved = routed_chunks
+    if retrieved is None:
+        q_emb = embed_query(q)
+        retrieve_k = max(top_k, 6)
+        retrieved = vector_store.search(collection, q_emb, top_k=retrieve_k)
+    else:
+        retrieve_cap = max(top_k, 6)
+        retrieved = retrieved[:retrieve_cap]
+
+    retrieved = _filter_retrieved_chunks(retrieved)
+
+    if not retrieved:
+        return {
+            "kind": "early",
+            "payload": {
+                "mode": "rag",
+                "branch": branch,
+                "answer": "No relevant passages were retrieved.",
+                "sources": [],
+                "route_reason": route_reason,
+                "route_confidence": route_confidence,
+            },
+        }
+
+    sources = _sources_from_retrieved(retrieved)
+    quality = _evidence_quality(retrieved)
+    weak_evidence = quality["count"] < 2 or quality["best_distance"] > (config.RETRIEVAL_MAX_DISTANCE + 0.05)
+    if weak_evidence:
+        return {
+            "kind": "early",
+            "payload": {
+                "mode": "rag",
+                "branch": branch,
+                "answer": _insufficient_evidence_answer(q, sources, quality),
+                "sources": sources,
+                "route_reason": f"{route_reason}|weak_evidence",
+                "route_confidence": min(route_confidence, 0.7),
+            },
+        }
+
+    context = build_context(retrieved[:top_k])
+    return {
+        "kind": "ready",
+        "context": context,
+        "sources": sources,
+        "branch": branch,
+        "route_reason": route_reason,
+        "route_confidence": route_confidence,
+        "top_k": top_k,
+        "retrieved_n": len(retrieved[:top_k]),
+        "context_chars": len(context),
+    }
+
+
 def _answer_with_rag(
     q: str,
     branch: str,
@@ -374,85 +495,27 @@ def _answer_with_rag(
     route_confidence: float = 1.0,
 ) -> dict[str, Any]:
     t0 = perf_counter()
-    collection = config.COLLECTION_MAP[branch]
-    if vector_store.collection_count(collection) == 0:
-        hint = (
-            f"No documents are indexed yet. Add preprocessed chunk CSV (e.g. All_RAG_Chunks.csv) under "
-            f"{config.chunks_dir_for_branch(branch)} and restart the backend (or DELETE /reset)."
-        )
-        return {
-            "mode": "rag",
-            "branch": branch,
-            "answer": hint,
-            "sources": [],
-            "route_reason": route_reason,
-            "route_confidence": route_confidence,
-        }
+    prep = _prepare_rag_for_llm(q, branch, top_k, routed_chunks, route_reason, route_confidence)
+    if prep["kind"] == "early":
+        return prep["payload"]
 
-    t_embed_start = perf_counter()
-    retrieved = routed_chunks
-    if retrieved is None:
-        q_emb = embed_query(q)
-        t_embed_ms = (perf_counter() - t_embed_start) * 1000
-        t_search_start = perf_counter()
-        retrieved = vector_store.search(collection, q_emb, top_k=max(top_k, 8))
-        t_search_ms = (perf_counter() - t_search_start) * 1000
-    else:
-        t_embed_ms = 0.0
-        t_search_ms = 0.0
-        retrieved = retrieved[: max(top_k, 8)]
+    context = prep["context"]
+    sources = prep["sources"]
+    branch = prep["branch"]
+    route_reason = prep["route_reason"]
+    route_confidence = prep["route_confidence"]
 
-    retrieved = _filter_retrieved_chunks(retrieved)
-
-    if not retrieved:
-        return {
-            "mode": "rag",
-            "branch": branch,
-            "answer": "No relevant passages were retrieved.",
-            "sources": [],
-            "route_reason": route_reason,
-            "route_confidence": route_confidence,
-        }
-
-    sources = _sources_from_retrieved(retrieved)
-    quality = _evidence_quality(retrieved)
-    weak_evidence = quality["count"] < 2 or quality["best_distance"] > (config.RETRIEVAL_MAX_DISTANCE + 0.05)
-    if weak_evidence:
-        return {
-            "mode": "rag",
-            "branch": branch,
-            "answer": _insufficient_evidence_answer(q, sources, quality),
-            "sources": sources,
-            "route_reason": f"{route_reason}|weak_evidence",
-            "route_confidence": min(route_confidence, 0.7),
-        }
-
-    t_ctx_start = perf_counter()
-    context = build_context(retrieved[:top_k])
-    t_ctx_ms = (perf_counter() - t_ctx_start) * 1000
     t_llm_start = perf_counter()
-    system_prompt = (
-        f"{load_branch_prompt(branch)}\n"
-        "- If evidence is sufficient, provide a detailed explanation with 8-12 concrete bullet points.\n"
-        "- Each bullet should be 2-4 sentences long and cover concrete steps, conditions, and implications.\n"
-        "- Output length: total answer should be at least 1200 Korean characters when evidence is sufficient.\n"
-        "- In '근거', map each key claim to evidence numbers (e.g. 근거: [1][2] ...).\n"
-        "- Do NOT include a separate '한계' section header.\n"
-        "- If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps (without a '한계' section)."
-    )
-    answer = generate_rag_answer(q, context, system_prompt=system_prompt)
+    answer = generate_rag_answer(q, context, system_prompt=_full_rag_system_prompt(branch))
     t_llm_ms = (perf_counter() - t_llm_start) * 1000
     t_total_ms = (perf_counter() - t0) * 1000
     logger.info(
-        "RAG timing | embed=%.1fms search=%.1fms context=%.1fms llm=%.1fms total=%.1fms retrieved=%s top_k=%s context_chars=%s",
-        t_embed_ms,
-        t_search_ms,
-        t_ctx_ms,
+        "RAG timing | llm=%.1fms total=%.1fms retrieved=%s top_k=%s context_chars=%s",
         t_llm_ms,
         t_total_ms,
-        len(retrieved[:top_k]),
+        prep.get("retrieved_n"),
         top_k,
-        len(context),
+        prep.get("context_chars"),
     )
     return {
         "mode": "rag",
@@ -540,6 +603,159 @@ def ask_question(question: str, branch: str, top_k: int = 5, mode: str = "auto")
         "route_reason": reason,
         "route_confidence": confidence,
     }
+
+
+def _ndjson(obj: dict[str, Any]) -> str:
+    return json.dumps(obj, ensure_ascii=False) + "\n"
+
+
+def _yield_answer_payload_stream(data: dict[str, Any]) -> Iterator[str]:
+    """완성된 응답 dict → meta + delta(청크) + done (공통·casual 등 동기 답변용)."""
+    yield _ndjson(
+        {
+            "type": "meta",
+            "mode": data.get("mode"),
+            "branch": data.get("branch"),
+            "sources": data.get("sources") or [],
+            "route_reason": data.get("route_reason"),
+            "route_confidence": data.get("route_confidence"),
+        },
+    )
+    text = str(data.get("answer") or "")
+    step = 72
+    for i in range(0, len(text), step):
+        yield _ndjson({"type": "delta", "text": text[i : i + step]})
+    yield _ndjson({"type": "done"})
+
+
+def _stream_rag_token_events(
+    q: str,
+    branch: str,
+    top_k: int,
+    routed_chunks: list[dict[str, Any]] | None,
+    route_reason: str,
+    route_confidence: float,
+) -> Iterator[str]:
+    prep = _prepare_rag_for_llm(q, branch, top_k, routed_chunks, route_reason, route_confidence)
+    if prep["kind"] == "early":
+        yield from _yield_answer_payload_stream(prep["payload"])
+        return
+    yield _ndjson(
+        {
+            "type": "meta",
+            "mode": "rag",
+            "branch": prep["branch"],
+            "sources": prep["sources"],
+            "route_reason": prep["route_reason"],
+            "route_confidence": prep["route_confidence"],
+        },
+    )
+    for kind, chunk in iter_stream_rag_answer(q, prep["context"], _full_rag_system_prompt(branch)):
+        if kind == "error":
+            yield _ndjson({"type": "error", "detail": chunk or USER_FACING_UNAVAILABLE})
+            yield _ndjson({"type": "done"})
+            return
+        if kind == "done":
+            break
+        if kind == "delta" and chunk:
+            yield _ndjson({"type": "delta", "text": chunk})
+    yield _ndjson({"type": "done"})
+
+
+def _stream_general_tokens(
+    q: str,
+    branch: str,
+    route_reason: str,
+    route_confidence: float,
+) -> Iterator[str]:
+    yield _ndjson(
+        {
+            "type": "meta",
+            "mode": "general",
+            "branch": branch,
+            "sources": [],
+            "route_reason": route_reason,
+            "route_confidence": route_confidence,
+        },
+    )
+    for kind, chunk in iter_stream_general_answer(q, branch):
+        if kind == "error":
+            yield _ndjson({"type": "error", "detail": chunk or USER_FACING_UNAVAILABLE})
+            yield _ndjson({"type": "done"})
+            return
+        if kind == "done":
+            break
+        if kind == "delta" and chunk:
+            yield _ndjson({"type": "delta", "text": chunk})
+    yield _ndjson({"type": "done"})
+
+
+def iter_chat_stream_ndjson(question: str, branch: str, top_k: int, mode: str) -> Iterator[str]:
+    """NDJSON 한 줄 = JSON 객체. type: meta | delta | error | done."""
+    q = question.strip()
+    if not q:
+        yield _ndjson({"type": "error", "detail": "question이 비어 있습니다."})
+        return
+    if mode not in ("auto", "rag", "general"):
+        yield _ndjson({"type": "error", "detail": "Invalid mode. Use one of: auto, rag, general"})
+        return
+
+    if branch == "common":
+        data = ask_question(q, branch="common", top_k=top_k, mode=mode)
+        yield from _yield_answer_payload_stream(data)
+        return
+
+    if branch not in config.SERVICE_BRANCHES:
+        yield _ndjson({"type": "error", "detail": f"Invalid branch: {branch}"})
+        return
+
+    if _is_casual_backchannel(q):
+        yield from _yield_answer_payload_stream(
+            {
+                "mode": "general",
+                "branch": branch,
+                "answer": (
+                    "알겠습니다. 교리·작전·절차 등 구체적인 질문을 해 주시면, "
+                    "선택하신 군(육·해·공) 교범 근거를 바탕으로 답변드릴게요."
+                ),
+                "sources": [],
+                "route_reason": "casual_backchannel",
+                "route_confidence": 1.0,
+            },
+        )
+        return
+
+    if mode == "general":
+        yield from _stream_general_tokens(q, branch, "forced_general", 1.0)
+        return
+    if mode == "rag":
+        yield from _stream_rag_token_events(q, branch, top_k, None, "forced_rag", 1.0)
+        return
+
+    router = route_question(q, branch=branch)
+    route = router.get("route", "general")
+    reason = str(router.get("reason", "auto_route"))
+    confidence = float(router.get("confidence", 0.5))
+
+    has_strong_doctrine_intent = any(w in q for w in STRONG_DOCTRINE_INTENT)
+    if route != "rag" and has_strong_doctrine_intent:
+        forced_reason = f"{reason}|forced_rag_by_strong_doctrine_intent"
+        yield from _stream_rag_token_events(
+            q,
+            branch,
+            top_k,
+            None,
+            forced_reason,
+            max(confidence, 0.8),
+        )
+        return
+
+    if route == "rag":
+        routed_chunks = router.get("retrieved_chunks") if isinstance(router.get("retrieved_chunks"), list) else None
+        yield from _stream_rag_token_events(q, branch, top_k, routed_chunks, reason, confidence)
+        return
+
+    yield from _stream_general_tokens(q, branch, reason, confidence)
 
 
 def full_reset_and_reingest() -> dict:

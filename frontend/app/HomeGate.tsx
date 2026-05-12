@@ -3,7 +3,7 @@
 import NextImage from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import styled, { keyframes } from "styled-components";
 
 const drift = keyframes`
@@ -85,21 +85,30 @@ const Kicker = styled.p`
   margin: 0 0 0.35rem;
   font-size: 0.7rem;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: rgb(148 163 184 / 0.95);
 `;
 
 const Title = styled.h1`
-  margin: 0 0 0.5rem;
-  font-size: 1.65rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
-  background: linear-gradient(135deg, #fff 0%, #bfdbfe 100%);
+  margin: 0 0 0.35rem;
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  background: linear-gradient(135deg, #fff 0%, #93c5fd 55%, #c4b5fd 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+`;
+
+const Tagline = styled.p`
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(148 163 184 / 0.88);
 `;
 
 const Desc = styled.p`
@@ -114,7 +123,7 @@ const Cta = styled(Link)`
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 0.9rem 1rem;
+  padding: 0.95rem 1rem;
   border-radius: 0.875rem;
   font-weight: 800;
   font-size: 0.95rem;
@@ -123,11 +132,17 @@ const Cta = styled(Link)`
   background: linear-gradient(180deg, #fff 0%, #e2e8f0 100%);
   border: 1px solid rgb(255 255 255 / 0.35);
   box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
 
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 12px 32px -10px rgb(0 0 0 / 0.4);
+    filter: brightness(1.02);
+  }
+
+  &:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 3px;
   }
 `;
 
@@ -137,14 +152,46 @@ const Hint = styled.p`
   color: rgb(148 163 184 / 0.9);
 `;
 
+const Skip = styled.button`
+  margin: 0.65rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgb(186 230 253 / 0.95);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+
+  &:hover {
+    color: #fff;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+`;
+
 /** 루트 `/` — 브랜딩 후 로그인으로 안내 (기존 즉시 redirect 대체) */
 export default function HomeGate() {
   const router = useRouter();
+  const redirectRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => router.replace("/login"), 2200);
-    return () => window.clearTimeout(t);
+    redirectRef.current = window.setTimeout(() => router.replace("/login"), 2800);
+    return () => {
+      if (redirectRef.current) window.clearTimeout(redirectRef.current);
+    };
   }, [router]);
+
+  function goLoginNow() {
+    if (redirectRef.current) window.clearTimeout(redirectRef.current);
+    router.replace("/login");
+  }
 
   return (
     <Shell>
@@ -155,11 +202,15 @@ export default function HomeGate() {
         <EmblemWrap>
           <NextImage src="/header-emblem.png" alt="" fill sizes="88px" style={{ objectFit: "contain" }} priority />
         </EmblemWrap>
-        <Kicker>Multi-branch RAG</Kicker>
-        <Title>DoctrineRAG</Title>
+        <Kicker>Doctrine RAG</Kicker>
+        <Title>DOCTOR</Title>
+        <Tagline>Multi-branch · Ollama</Tagline>
         <Desc>육·해·공 교리 인덱스와 Ollama를 연결한 질의응답 PoC입니다. 로그인 후 챗봇을 이용할 수 있습니다.</Desc>
         <Cta href="/login">로그인으로 이동</Cta>
-        <Hint>잠시 후 자동으로 로그인 화면으로 이동합니다.</Hint>
+        <Skip type="button" onClick={goLoginNow}>
+          기다리지 않고 로그인 화면으로
+        </Skip>
+        <Hint>약 3초 후 자동으로 로그인 화면으로 이동합니다.</Hint>
       </Panel>
     </Shell>
   );

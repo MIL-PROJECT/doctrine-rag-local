@@ -37,20 +37,23 @@ const Button = styled.button<{ $active: boolean }>`
     border-radius: 0;
     font-size: 1.125rem;
     padding: 1.75rem 0.65rem;
-    border-bottom: 1px solid transparent;
+    border-bottom: none;
     background: transparent;
+    transition: color 0.15s ease, box-shadow 0.15s ease;
 
     ${({ $active }) =>
       $active
         ? css`
-            border-bottom-color: var(--branch-accent);
+            box-shadow: inset 0 -3px 0 0 var(--branch-accent);
             color: #fff;
           `
         : css`
+            box-shadow: none;
+            color: rgb(255 255 255 / 0.78);
             &:hover {
               background: transparent;
               color: #fff;
-              border-bottom-color: transparent;
+              box-shadow: inset 0 -3px 0 0 rgb(255 255 255 / 0.35);
             }
           `}
   }

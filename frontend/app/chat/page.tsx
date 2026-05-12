@@ -141,42 +141,120 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, { role: "user", content: question, time: t }]);
     setBusy(true);
 
+    const assistantTime = timeLabel();
+    setMessages((prev) => [...prev, { role: "assistant", content: "", time: assistantTime }]);
+
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ branch, question, top_k: 5, mode: chatMode }),
       });
-      const data = (await res.json()) as {
-        answer?: string;
-        detail?: string;
-        sources?: BackendSource[];
-        mode?: ChatResponseMode;
-      };
 
       if (!res.ok) {
-        const msg = data.detail || "요청 실패";
+        const errText = await res.text().catch(() => "");
+        let msg = "요청 실패";
+        try {
+          const j = JSON.parse(errText) as { detail?: string };
+          if (typeof j.detail === "string") msg = j.detail;
+        } catch {
+          if (errText) msg = errText.slice(0, 500);
+        }
         setLastResponseMode(null);
-        setMessages((prev) => [...prev, { role: "assistant", content: msg, time: timeLabel() }]);
         setSources([]);
+        setMessages((prev) => {
+          const n = [...prev];
+          n[n.length - 1] = { role: "assistant", content: msg, time: timeLabel() };
+          return n;
+        });
         return;
       }
 
-      const rows = mapBackendSourcesToRows(data.sources ?? []);
-      setLastResponseMode(data.mode ?? null);
-      setSources(rows);
-      setMessages((prev) => [...prev, { role: "assistant", content: data.answer || "", time: timeLabel() }]);
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error("no body");
+      }
+      const dec = new TextDecoder();
+      let buf = "";
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          let ev: { type?: string; text?: string; detail?: string; mode?: ChatResponseMode; sources?: BackendSource[]; branch?: string };
+          try {
+            ev = JSON.parse(line) as typeof ev;
+          } catch {
+            continue;
+          }
+          if (ev.type === "meta") {
+            setLastResponseMode(ev.mode ?? null);
+            setSources(mapBackendSourcesToRows(ev.sources ?? []));
+          } else if (ev.type === "delta" && typeof ev.text === "string") {
+            accumulated += ev.text;
+            setMessages((prev) => {
+              const n = [...prev];
+              n[n.length - 1] = { role: "assistant", content: accumulated, time: assistantTime };
+              return n;
+            });
+          } else if (ev.type === "error") {
+            const detail = typeof ev.detail === "string" ? ev.detail : "스트림 오류";
+            setLastResponseMode(null);
+            setSources([]);
+            setMessages((prev) => {
+              const n = [...prev];
+              n[n.length - 1] = { role: "assistant", content: detail, time: timeLabel() };
+              return n;
+            });
+            return;
+          }
+        }
+      }
+
+      if (buf.trim()) {
+        try {
+          const ev = JSON.parse(buf) as { type?: string; text?: string };
+          if (ev.type === "delta" && typeof ev.text === "string") {
+            accumulated += ev.text;
+            setMessages((prev) => {
+              const n = [...prev];
+              n[n.length - 1] = { role: "assistant", content: accumulated, time: assistantTime };
+              return n;
+            });
+          }
+        } catch {
+          /* ignore trailing partial */
+        }
+      }
+
+      if (!accumulated.trim()) {
+        setMessages((prev) => {
+          const n = [...prev];
+          n[n.length - 1] = {
+            role: "assistant",
+            content: "응답 본문이 비어 있습니다. 백엔드 로그와 Ollama 연결을 확인하세요.",
+            time: timeLabel(),
+          };
+          return n;
+        });
+      }
     } catch {
       setLastResponseMode(null);
-      setMessages((prev) => [
-        ...prev,
-        {
+      setSources([]);
+      setMessages((prev) => {
+        const n = [...prev];
+        n[n.length - 1] = {
           role: "assistant",
           content: "API 호출 중 오류가 발생했습니다. Next 서버와 FastAPI 백엔드 연결을 확인하세요.",
           time: timeLabel(),
-        },
-      ]);
-      setSources([]);
+        };
+        return n;
+      });
     } finally {
       setBusy(false);
       await refreshHealth();
