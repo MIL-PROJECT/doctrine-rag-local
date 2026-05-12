@@ -220,7 +220,7 @@ async def get_agent_card(agent_id: str):
 
 class A2ATaskRequest(BaseModel):
     question: str
-    top_k: int = 15
+    top_k: int = 10
     task_id: str | None = None
 
 
@@ -239,3 +239,22 @@ async def execute_a2a_task(req: A2ATaskRequest):
 async def get_audit_log(limit: int = 50):
     """최근 감사 로그 반환."""
     return {"entries": read_recent(limit=limit)}
+
+
+@app.get("/a2a/cache")
+async def list_cache():
+    """현재 캐시된 시연 답변 목록."""
+    from a2a.cache import list_cached, cache_enabled
+    return {
+        "enabled": cache_enabled(),
+        "entries": list_cached(),
+    }
+
+
+@app.delete("/a2a/cache")
+async def clear_cache():
+    """캐시 전체 삭제."""
+    from a2a.cache import CACHE_PATH
+    if CACHE_PATH.exists():
+        CACHE_PATH.unlink()
+    return {"status": "cleared"}

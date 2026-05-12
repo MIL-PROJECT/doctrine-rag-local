@@ -144,7 +144,20 @@ supervisor = build_supervisor_graph()
 
 
 def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]:
+    from a2a import cache
+
     record("task_received", {"task_id": task_id, "question": question})
+
+    cached = cache.get(question, top_k)
+    if cached is not None:
+        record("cache_hit", {
+            "task_id": task_id,
+            "question": question,
+        })
+        response = dict(cached["response"])
+        response["task_id"] = task_id
+        response["from_cache"] = True
+        return response
 
     result = supervisor.invoke({
         "question": question,
@@ -173,6 +186,13 @@ def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]
             src for a in result["answers"].values() for src in a["sources"]
         ],
     }
+
+    if result.get("answers"):
+        cache.put(question, top_k, response)
+        record("cache_stored", {
+            "task_id": task_id,
+            "question": question,
+        })
 
     record("task_completed", {
         "task_id": task_id,
