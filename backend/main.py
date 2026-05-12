@@ -1,6 +1,9 @@
 import logging
 import asyncio
+import json
+import uuid
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 from typing import Literal
 
@@ -13,6 +16,8 @@ import config
 from llm import ollama_health_status
 from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest
 import vector_store
+from a2a.supervisor import run_a2a_task
+from a2a.audit import read_recent
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL, logging.INFO),
@@ -210,3 +215,69 @@ async def reset() -> dict[str, Any]:
         return await run_in_threadpool(full_reset_and_reingest)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# === A2A Endpoints ===
+
+@app.get("/a2a/agents")
+async def list_agent_cards():
+    """모든 Agent Card 반환 — A2A 표준 discovery."""
+    cards_path = Path(__file__).parent / "a2a" / "agent_cards.json"
+    with open(cards_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.get("/a2a/agents/{agent_id}")
+async def get_agent_card(agent_id: str):
+    """특정 Agent Card 반환."""
+    cards_path = Path(__file__).parent / "a2a" / "agent_cards.json"
+    with open(cards_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for agent in data["agents"]:
+        if agent["id"] == agent_id:
+            return agent
+
+    raise HTTPException(status_code=404, detail=f"Agent not found: {agent_id}")
+
+
+class A2ATaskRequest(BaseModel):
+    question: str
+    top_k: int = 10
+    task_id: str | None = None
+
+
+@app.post("/a2a/task")
+async def execute_a2a_task(req: A2ATaskRequest):
+    """A2A Task 실행 — Supervisor 패턴으로 3군 에이전트 협업."""
+    task_id = req.task_id or str(uuid.uuid4())
+    return run_a2a_task(
+        question=req.question,
+        task_id=task_id,
+        top_k=req.top_k,
+    )
+
+
+@app.get("/a2a/audit")
+async def get_audit_log(limit: int = 50):
+    """최근 감사 로그 반환."""
+    return {"entries": read_recent(limit=limit)}
+
+
+@app.get("/a2a/cache")
+async def list_cache():
+    """현재 캐시된 시연 답변 목록."""
+    from a2a.cache import list_cached, cache_enabled
+    return {
+        "enabled": cache_enabled(),
+        "entries": list_cached(),
+    }
+
+
+@app.delete("/a2a/cache")
+async def clear_cache():
+    """캐시 전체 삭제."""
+    from a2a.cache import CACHE_PATH
+    if CACHE_PATH.exists():
+        CACHE_PATH.unlink()
+    return {"status": "cleared"}

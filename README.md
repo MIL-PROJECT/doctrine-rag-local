@@ -2,6 +2,26 @@
 
 전처리된 **RAG 청크 CSV**를 `backend/data/chunks/{army,navy,air_force}/`에 두고, **로컬 임베딩(SentenceTransformers) + 단일 ChromaDB 디렉터리 + 군별 컬렉션 + 원격 Ollama**로 질의응답하는 **Multi-Branch Doctrine RAG** 데모입니다. LLM은 **Google Colab GPU에서 실행하는 Ollama**를 **ngrok 등 공개 HTTPS URL**로 붙이는 구성을 기준으로 합니다. **OpenAI API·키·의존성은 사용하지 않습니다.**
 
+## 빠른 시작 (Colab + Drive 캐시)
+
+CSV 재인제스트 없이 미리 빌드된 ChromaDB 스냅샷으로 바로 데모를 띄우는 경로입니다.
+
+1. Google Drive `MyDrive/doctor-cache/` 폴더에 `doctrine_chroma_db.zip` 업로드 (완료 가정)
+2. Colab 에서 `notebooks/colab_boot.ipynb` 열고 Runtime → GPU 선택
+3. 셀 1~6 순서대로 실행. 셀 6 의 `YOUR_NGROK_TOKEN` 에 본인 ngrok authtoken 입력
+4. 셀 6 출력에 찍힌 ngrok URL 을 프론트엔드 `.env` 의 `NEXT_PUBLIC_API_URL` 로 설정
+
+노트북이 자동으로 `.env` 를 작성하면서 `CHROMA_COLLECTION_AIR_FORCE=airforce_doctrine` 오버라이드를 넣어 줍니다 (캐시 zip 의 공군 컬렉션 이름과 백엔드 기본값 차이를 맞추기 위함).
+
+## ChromaDB 구성
+
+`doctrine_chroma_db.zip` 스냅샷 기준.
+
+- `army_doctrine` — 육군 FM 교범 9개 문서
+- `navy_doctrine` — 해군 JP 교범 3개 문서
+- `airforce_doctrine` — 공군 AFDP 교범 10개 문서
+- 총 임베딩: 26,276개 (BGE-M3, 1024-dim)
+
 ## 프로젝트 개요
 
 | 구분 | 기술 |
@@ -324,3 +344,90 @@ doctrine-rag-ollama/
 ## 라이선스
 
 데모·교육용. 문서 내용·배포 환경에 맞게 이용약관·보안을 별도 검토하세요.
+
+---
+
+## 🎯 DOCTOR v3.4 — A2A + LangGraph Agentic System
+
+박성준(psj950101) 작업 브랜치. 합참 자문관 페르소나 기반 3군 합동 교리 AI 에이전트 시스템 구현.
+
+### 핵심 추가 기능
+
+**A2A 에이전트 시스템 (LangGraph Supervisor 패턴)**
+- 3군 도메인 에이전트 (ARMY/NAVY/AIR_FORCE) LangChain Runnable로 구현
+- Joint Operations Supervisor: 질문 분석 → 위임 → 답변 종합
+- Agent Card 4종 (army/navy/air_force/supervisor) — A2A 표준 discovery 준비
+
+**감사 로그 시스템 (audit_log.jsonl)**
+- 모든 에이전트 통신 시간순 기록
+- task_id 기반 추적
+- 이벤트: task_received, supervisor_analyzed, agent_invoked, agent_responded, supervisor_synthesized, task_completed, cache_hit, cache_stored
+
+**답변 캐시 (demo_cache.json)**
+- SHA256 키 기반 캐싱
+- 환경변수 A2A_CACHE_ENABLED ON/OFF
+- 발표 시연 안정 재생 (캐시 히트 시 ~1초 응답)
+
+### 신규 엔드포인트
+
+| 메서드 | 경로 | 기능 |
+|--------|------|------|
+| GET | /a2a/agents | 모든 Agent Card 반환 |
+| GET | /a2a/agents/{agent_id} | 특정 Agent Card 반환 |
+| POST | /a2a/task | A2A Task 실행 (Supervisor) |
+| GET | /a2a/audit?limit=N | 감사 로그 조회 |
+| GET | /a2a/cache | 캐시 목록 |
+| DELETE | /a2a/cache | 캐시 전체 삭제 |
+
+### 신규 모듈 구조
+
+```text
+backend/a2a/
+├── __init__.py
+├── agent_cards.json      # 4 Agent Cards
+├── audit.py              # 감사 로그
+├── agents.py             # LangChain Runnable 3개
+├── supervisor.py         # LangGraph StateGraph
+└── cache.py              # SHA256 키 기반 캐시
+```
+
+### 추가 의존성
+
+```
+langchain==0.3.7
+langgraph==0.2.50
+langchain-community==0.3.5
+```
+
+### 환경변수 신규
+
+```
+A2A_CACHE_ENABLED=true|false
+```
+
+### Colab 부팅 (`notebooks/colab_boot.ipynb`)
+
+6셀 구성:
+
+1. Google Drive 마운트
+2. ChromaDB 압축 해제 (Drive 캐시에서)
+3. zstd + Ollama 설치, qwen2.5:3b 모델 pull
+4. Python 패키지 설치
+5. doctrine-agent-local clone + ChromaDB 연결 + .env 작성
+6. FastAPI 서버 시작 + ngrok 터널
+
+### 향후 작업 (별도 트랙)
+
+- **모델 파인튜닝** — qwen2.5:3b 답변 품질 향상 (다른 팀원 위임)
+- **블록체인 감사 원장** — 해시체인 → Hyperledger Fabric 확장 (별도 브랜치)
+- **프론트엔드 UI 통합** — Next.js 기반 3군 탭 UI
+
+### 발표 일정
+
+- **2026-05-21**: 학교 발표 (Phase 1 — 프로토타입 시연)
+- **2026-09-07**: NDP 발표 (Phase 2 — 사업 제안)
+
+### 기준 커밋
+
+- 브랜치 base: `573f8af` (LLM 사양 초기값 회귀)
+- 사양: `top_k=10`, `OLLAMA_MAX_TOKENS=512`, synthesizer는 단순 concat (LLM 융합 보류)
