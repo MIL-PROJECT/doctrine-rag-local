@@ -258,3 +258,54 @@ async def clear_cache():
     if CACHE_PATH.exists():
         CACHE_PATH.unlink()
     return {"status": "cleared"}
+
+
+# === Phase 2a: Blockchain Audit Endpoints ===
+
+@app.get("/a2a/verify/{task_id}")
+async def verify_task_integrity(task_id: str):
+    """특정 Task의 무결성 검증.
+
+    Returns:
+        {
+            "task_id": str,
+            "found": bool,
+            "valid": bool,
+            "chain_index": int | None,
+            "event_hash": str | None,
+            "previous_hash": str | None,
+            "error": str | None,
+        }
+    """
+    from blockchain.verifier import verify_task
+    return verify_task(task_id)
+
+
+@app.get("/a2a/ledger/latest")
+async def get_latest_ledger(limit: int = 20):
+    """최근 감사 이벤트 + 체인 상태.
+
+    Args:
+        limit: 반환할 이벤트 개수 (기본 20)
+
+    Returns:
+        {
+            "chain_status": {
+                "valid": bool,
+                "total_events": int,
+                "broken_at": int | None,
+                "error": str | None,
+            },
+            "events": list[dict],  # 최신순
+        }
+    """
+    from blockchain.local_ledger import get_latest_events
+    from blockchain.verifier import verify_chain
+
+    events = get_latest_events(limit=limit)
+    chain_status = verify_chain()
+
+    return {
+        "chain_status": chain_status,
+        "events": events,
+    }

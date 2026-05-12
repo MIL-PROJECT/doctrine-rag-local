@@ -31,3 +31,29 @@ def read_recent(limit: int = 50) -> list[dict[str, Any]]:
     with open(AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
     return [json.loads(line) for line in lines[-limit:]]
+
+
+def emit_blockchain_event(event_payload: dict) -> dict:
+    """블록체인 감사 이벤트 emit.
+
+    A2A_BLOCKCHAIN_ENABLED=false 시 no-op로 동작 (회귀 안전).
+    블록체인 모듈 import/실행 실패 시 graceful degradation
+    (audit_log 기록만 남기고 메인 작업에는 영향 없음).
+
+    Returns:
+        성공 시 ledger entry (chain_index, event_hash 포함)
+        OFF/실패 시 {"skipped": True, "reason": "..."}
+    """
+    try:
+        from blockchain.config import BLOCKCHAIN_ENABLED
+        if not BLOCKCHAIN_ENABLED:
+            return {"skipped": True, "reason": "blockchain_disabled"}
+
+        from blockchain.local_ledger import append_event
+        return append_event(event_payload)
+    except Exception as e:
+        try:
+            record("blockchain_emit_failed", {"error": str(e)[:200]})
+        except Exception:
+            pass
+        return {"skipped": True, "reason": "exception", "error": str(e)[:200]}

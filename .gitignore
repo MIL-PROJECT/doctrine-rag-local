@@ -12,3 +12,4 @@ frontend/.next
 .DS_Store
 *.pem
 backend/a2a/demo_cache.json
+.claude/

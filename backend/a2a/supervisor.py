@@ -113,6 +113,36 @@ def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]
         response = dict(cached["response"])
         response["task_id"] = task_id
         response["from_cache"] = True
+
+        # === Phase 2a: Blockchain Audit Hook (cache hit) ===
+        # BLOCKCHAIN_ENABLED=false 시 no-op, 실패해도 메인 작업 영향 없음
+        try:
+            from blockchain.audit_event import build_task_event
+            from a2a.audit import emit_blockchain_event
+
+            bc_event = build_task_event(
+                task_id=task_id,
+                question=question,
+                final_answer=response["final_answer"],
+                branches_consulted=response["branches_consulted"],
+                answers_by_branch=response["answers_by_branch"],
+                all_sources=response["all_sources"],
+                from_cache=True,
+            )
+            bc_result = emit_blockchain_event(bc_event)
+
+            if not bc_result.get("skipped"):
+                response["blockchain"] = {
+                    "chain_index": bc_result.get("integrity", {}).get("chain_index"),
+                    "event_hash": bc_result.get("integrity", {}).get("event_hash"),
+                }
+        except Exception as e:
+            record("blockchain_hook_failed", {
+                "task_id": task_id,
+                "error": str(e)[:200],
+            })
+        # === End Phase 2a Hook ===
+
         return response
 
     result = supervisor.invoke({
@@ -149,6 +179,35 @@ def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]
             "task_id": task_id,
             "question": question,
         })
+
+    # === Phase 2a: Blockchain Audit Hook ===
+    # BLOCKCHAIN_ENABLED=false 시 no-op, 실패해도 메인 작업 영향 없음
+    try:
+        from blockchain.audit_event import build_task_event
+        from a2a.audit import emit_blockchain_event
+
+        bc_event = build_task_event(
+            task_id=task_id,
+            question=question,
+            final_answer=response["final_answer"],
+            branches_consulted=response["branches_consulted"],
+            answers_by_branch=response["answers_by_branch"],
+            all_sources=response["all_sources"],
+            from_cache=response.get("from_cache", False),
+        )
+        bc_result = emit_blockchain_event(bc_event)
+
+        if not bc_result.get("skipped"):
+            response["blockchain"] = {
+                "chain_index": bc_result.get("integrity", {}).get("chain_index"),
+                "event_hash": bc_result.get("integrity", {}).get("event_hash"),
+            }
+    except Exception as e:
+        record("blockchain_hook_failed", {
+            "task_id": task_id,
+            "error": str(e)[:200],
+        })
+    # === End Phase 2a Hook ===
 
     record("task_completed", {
         "task_id": task_id,
