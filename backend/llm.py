@@ -302,3 +302,93 @@ def generate_general_answer(question: str, branch: str | None = None) -> str:
     if content is None:
         return USER_FACING_UNAVAILABLE
     return str(content).strip()
+
+
+# === A2A Supervisor synthesis (additive — 기존 함수 무수정) ===
+
+SYNTHESIS_SYSTEM_PROMPT = """
+당신은 합참 자문관 역할의 합동 교리 통합관(Joint Doctrine Supervisor)입니다.
+3군(육군/해군/공군) 에이전트가 각자 교리에 따라 답변한 내용을 받아,
+합동성(jointness) 관점에서 단일 종합 답변을 작성합니다.
+
+작성 원칙:
+- 각 군 입장의 핵심을 정확히 요약
+- 공통점과 차이점을 명확히 비교
+- 합동작전 시 통합 운용 관점에서 결론 제시
+- 인용 출처는 [육군], [해군], [공군] 형식으로 표기
+- 한국어로 구조화된 형식 (요약 → 비교 → 결론)
+- 사실 왜곡, 추측, 환각 금지
+""".strip()
+
+
+def generate_synthesis_answer(prompt: str, max_tokens: int | None = None) -> str:
+    """A2A Supervisor 종합 답변 전용 — 3군 답변을 합참 자문관 페르소나로 융합.
+
+    generate_rag_answer 와 동일한 httpx/에러처리 패턴을 사용하되,
+    system prompt 와 num_predict 만 종합 답변용으로 분리.
+    """
+    url = f"{config.OLLAMA_BASE_URL}/api/chat"
+
+    payload: dict[str, Any] = {
+        "model": config.OLLAMA_MODEL,
+        "stream": False,
+        "messages": [
+            {"role": "system", "content": SYNTHESIS_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "options": {
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "num_predict": max_tokens if max_tokens is not None else config.OLLAMA_MAX_TOKENS,
+        },
+    }
+
+    headers = ollama_request_headers()
+
+    try:
+        with httpx.Client(timeout=_chat_timeout(), headers=headers) as client:
+            r = client.post(url, json=payload)
+    except httpx.TimeoutException:
+        logger.exception("Ollama synthesis: timeout")
+        return USER_FACING_UNAVAILABLE
+    except httpx.RequestError:
+        logger.exception("Ollama synthesis: connection failed (%s)", url)
+        return USER_FACING_UNAVAILABLE
+
+    body = r.text or ""
+
+    if r.status_code >= 400:
+        logger.error("Ollama synthesis: HTTP %s — %s", r.status_code, body[:500])
+        return USER_FACING_UNAVAILABLE
+
+    if _looks_like_html(body):
+        logger.error("Ollama synthesis: HTML response (likely ngrok interstitial)")
+        return USER_FACING_UNAVAILABLE
+
+    try:
+        data = r.json()
+    except ValueError:
+        logger.error("Ollama synthesis: response is not JSON")
+        return USER_FACING_UNAVAILABLE
+
+    if not isinstance(data, dict):
+        return USER_FACING_UNAVAILABLE
+
+    err = data.get("error")
+    if err:
+        msg = err if isinstance(err, str) else str(err)
+        logger.warning("Ollama synthesis: API error: %s", msg[:500])
+        lower = msg.lower()
+        if "not found" in lower or "unknown model" in lower or "pull" in lower:
+            return MODEL_NOT_FOUND_HINT
+        return USER_FACING_UNAVAILABLE
+
+    message = data.get("message") or {}
+    if not isinstance(message, dict):
+        return USER_FACING_UNAVAILABLE
+
+    content = message.get("content")
+    if content is None:
+        return USER_FACING_UNAVAILABLE
+
+    return str(content).strip()

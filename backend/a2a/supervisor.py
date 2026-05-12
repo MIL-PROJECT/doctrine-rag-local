@@ -1,8 +1,10 @@
 """A2A Supervisor — 질문 분석, 3군 에이전트 위임, 답변 종합"""
+import os
 from typing import TypedDict, Any
 from langgraph.graph import StateGraph, END
 from a2a.agents import army_agent, navy_agent, air_agent
 from a2a.audit import record
+from llm import generate_synthesis_answer, USER_FACING_UNAVAILABLE, MODEL_NOT_FOUND_HINT
 
 
 class A2AState(TypedDict):
@@ -59,20 +61,73 @@ def invoke_agents(state: A2AState) -> A2AState:
 
 def synthesize_answer(state: A2AState) -> A2AState:
     answers = state["answers"]
+    question = state["question"]
+    branch_labels = {"army": "육군", "navy": "해군", "air_force": "공군"}
 
+    # 단일 군 = 그대로 반환 (LLM 호출 불필요)
     if len(answers) == 1:
         branch = list(answers.keys())[0]
-        final = f"## {branch.upper()} 교리 답변\n\n{answers[branch]['answer']}"
-    else:
+        final = answers[branch]["answer"]
+        record("supervisor_synthesized", {
+            "task_id": state["task_id"],
+            "branches_consulted": list(answers.keys()),
+            "synthesis_mode": "passthrough",
+            "final_answer_length": len(final),
+        })
+        return {**state, "final_answer": final}
+
+    # 다중 군 = LLM 융합 호출
+    sub_answers_text = ""
+    for branch, result in answers.items():
+        label = branch_labels.get(branch, branch.upper())
+        sub_answers_text += f"\n[{label} 교리 답변]\n{result['answer']}\n"
+
+    synthesis_prompt = f"""아래는 3군 에이전트가 각자 자기 교리에 따라 답변한 내용입니다.
+이를 합동성(jointness) 관점에서 통합하여 단일 종합 답변을 작성하세요.
+
+원 질문: {question}
+
+각 군 답변:
+{sub_answers_text}
+
+작성 지침:
+1. 각 군의 핵심 입장을 1~2문장으로 요약
+2. 공통점과 차이점을 명확히 비교
+3. 합동작전 시 통합 운용 관점에서 종합 결론 제시
+4. 인용은 [육군], [해군], [공군] 형식으로 표기
+5. 답변은 한국어로, 구조화된 형식 (요약 → 비교 → 결론)
+
+종합 답변:"""
+
+    synthesis_max_tokens = int(os.getenv("SYNTHESIS_MAX_TOKENS", "4096"))
+
+    synthesis_mode = "llm_fusion"
+    final = ""
+    try:
+        final = generate_synthesis_answer(
+            prompt=synthesis_prompt,
+            max_tokens=synthesis_max_tokens,
+        )
+        # llm.py 는 실패 시 USER_FACING_UNAVAILABLE / MODEL_NOT_FOUND_HINT 문자열을
+        # 그대로 반환하므로(예외 X) 폴백 트리거로 명시 검사
+        if not final or not final.strip() or final in (USER_FACING_UNAVAILABLE, MODEL_NOT_FOUND_HINT):
+            raise RuntimeError(f"synthesis_unusable: {final[:80]}")
+    except Exception as e:
+        record("synthesis_fallback", {
+            "task_id": state["task_id"],
+            "error": str(e),
+        })
         parts = ["# 합동 교리 답변 (Joint Doctrine Response)\n"]
         for branch, result in answers.items():
-            parts.append(f"\n## {branch.upper()} 관점\n")
+            parts.append(f"\n## {branch_labels.get(branch, branch.upper())} 관점\n")
             parts.append(result["answer"])
         final = "\n".join(parts)
+        synthesis_mode = "fallback_concat"
 
     record("supervisor_synthesized", {
         "task_id": state["task_id"],
         "branches_consulted": list(answers.keys()),
+        "synthesis_mode": synthesis_mode,
         "final_answer_length": len(final),
     })
 

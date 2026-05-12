@@ -220,7 +220,7 @@ async def get_agent_card(agent_id: str):
 
 class A2ATaskRequest(BaseModel):
     question: str
-    top_k: int = 10
+    top_k: int = 15
     task_id: str | None = None
 
 

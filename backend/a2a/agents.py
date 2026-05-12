@@ -9,7 +9,7 @@ def _make_branch_runnable(branch: str):
     """특정 군의 RAG를 호출하는 Runnable 생성."""
     def _invoke(inputs: dict[str, Any]) -> dict[str, Any]:
         question = inputs["question"]
-        top_k = inputs.get("top_k", 10)
+        top_k = inputs.get("top_k", 15)
 
         record("agent_invoked", {
             "branch": branch,

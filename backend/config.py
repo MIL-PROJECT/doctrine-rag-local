@@ -49,6 +49,8 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 _ollama_timeout = os.getenv("OLLAMA_TIMEOUT_SECONDS") or os.getenv("OLLAMA_TIMEOUT") or "180"
 OLLAMA_TIMEOUT_SECONDS = float(_ollama_timeout)
 OLLAMA_MAX_TOKENS = int(os.getenv("OLLAMA_MAX_TOKENS", "512"))
+# A2A Supervisor 종합 답변 전용 토큰 상한 (각 군 답변과 별개로 제어)
+SYNTHESIS_MAX_TOKENS = int(os.getenv("SYNTHESIS_MAX_TOKENS", "4096"))
 OLLAMA_HEALTHCHECK_TIMEOUT = float(os.getenv("OLLAMA_HEALTHCHECK_TIMEOUT", "10"))
 
 # BGE-M3 (1024-dim). 모델을 바꾼 뒤에는 기존 Chroma 벡터 차원과 맞지 않으므로 /reset 또는 chroma_db 삭제 후 재인제스트 필요.
