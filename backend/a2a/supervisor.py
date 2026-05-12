@@ -82,22 +82,14 @@ def synthesize_answer(state: A2AState) -> A2AState:
         label = branch_labels.get(branch, branch.upper())
         sub_answers_text += f"\n[{label} 교리 답변]\n{result['answer']}\n"
 
-    synthesis_prompt = f"""아래는 3군 에이전트가 각자 자기 교리에 따라 답변한 내용입니다.
-이를 합동성(jointness) 관점에서 통합하여 단일 종합 답변을 작성하세요.
-
-원 질문: {question}
+    synthesis_prompt = f"""원 질문: {question}
 
 각 군 답변:
 {sub_answers_text}
 
-작성 지침:
-1. 각 군의 핵심 입장을 1~2문장으로 요약
-2. 공통점과 차이점을 명확히 비교
-3. 합동작전 시 통합 운용 관점에서 종합 결론 제시
-4. 인용은 [육군], [해군], [공군] 형식으로 표기
-5. 답변은 한국어로, 구조화된 형식 (요약 → 비교 → 결론)
-
-종합 답변:"""
+위 답변들을 합동성 관점에서 통합하여 종합 답변을 작성하세요.
+SYSTEM 지침의 헤더 형식(### 핵심 요약 / ### 군별 입장 비교 / ### 합동성 관점의 통합 결론)을 정확히 따르세요.
+"""
 
     synthesis_max_tokens = int(os.getenv("SYNTHESIS_MAX_TOKENS", "4096"))
 
