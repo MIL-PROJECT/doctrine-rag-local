@@ -318,8 +318,7 @@ export function SourceDocumentsWorkspace({
       setLoading(true);
       setError(null);
       try {
-        const targetBranch = branch === "common" ? "navy" : branch;
-        const res = await fetch(`/api/source-documents?branch=${encodeURIComponent(targetBranch)}`, { cache: "no-store" });
+        const res = await fetch(`/api/source-documents?branch=${encodeURIComponent(branch)}`, { cache: "no-store" });
         const data = (await res.json()) as {
           documents?: Array<{
             doc_id?: string;

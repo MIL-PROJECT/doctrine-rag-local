@@ -39,7 +39,7 @@ export default function ChatPage() {
   const router = useRouter();
   const [sessionUser, setSessionUser] = useState<DoctrineUser | null>(null);
   const [activeTab, setActiveTab] = useState("채팅");
-  const [branch, setBranch] = useState<BranchId>("navy");
+  const [branch, setBranch] = useState<BranchId>("common");
   const [input, setInput] = useState("");
   const [chatTitle, setChatTitle] = useState("새 대화");
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -66,14 +66,24 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Record<string, ChatSession>>({});
+  const isAdmin = Boolean(sessionUser?.permissions.includes("ADMIN"));
 
   useEffect(() => {
-    setSessionUser(getCurrentUser());
-  }, []);
+    const syncSession = () => {
+      const u = getCurrentUser();
+      setSessionUser(u);
+      if (!u) router.replace("/login");
+    };
+    syncSession();
+    window.addEventListener("storage", syncSession);
+    return () => window.removeEventListener("storage", syncSession);
+  }, [router]);
 
   const handleLogout = useCallback(() => {
     logout();
+    setSessionUser(null);
     router.replace("/login");
+    router.refresh();
   }, [router]);
 
   const refreshHealth = useCallback(async () => {
@@ -156,12 +166,27 @@ export default function ChatPage() {
         const res = await fetch("/api/a2a/task", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, top_k }),
+          body: JSON.stringify({
+            question,
+            top_k,
+            user_id: sessionUser?.id ?? "",
+            military_number: sessionUser?.militaryNumber ?? "",
+          }),
         });
         const data = (await res.json().catch(() => ({}))) as {
           detail?: string;
           final_answer?: string;
           all_sources?: BackendSource[];
+          task_id?: string;
+          from_cache?: boolean;
+          blockchain?: {
+            skipped?: boolean;
+            reason?: string;
+            chain_index?: number;
+            event_hash?: string;
+            previous_hash?: string;
+            error?: string;
+          };
         };
         if (!res.ok) {
           const msg = typeof data.detail === "string" ? data.detail : `A2A 요청 실패 (${res.status})`;
@@ -175,6 +200,20 @@ export default function ChatPage() {
           return;
         }
         const answer = String(data.final_answer ?? "").trim();
+        const bc = data.blockchain;
+        const a2aLedger =
+          bc && typeof bc === "object"
+            ? {
+                skipped: Boolean(bc.skipped),
+                reason: typeof bc.reason === "string" ? bc.reason : undefined,
+                chainIndex: typeof bc.chain_index === "number" ? bc.chain_index : undefined,
+                eventHash: typeof bc.event_hash === "string" ? bc.event_hash : undefined,
+                previousHash: typeof bc.previous_hash === "string" ? bc.previous_hash : undefined,
+                error: typeof bc.error === "string" ? bc.error : undefined,
+                taskId: typeof data.task_id === "string" ? data.task_id : undefined,
+                fromCache: Boolean(data.from_cache),
+              }
+            : undefined;
         setLastResponseMode("a2a");
         setSources(mapBackendSourcesToRows(data.all_sources ?? []));
         setMessages((prev) => {
@@ -183,6 +222,7 @@ export default function ChatPage() {
             role: "assistant",
             content: answer || "응답 본문이 비어 있습니다.",
             time: assistantTime,
+            ...(a2aLedger ? { a2aLedger } : {}),
           };
           return n;
         });
@@ -192,7 +232,14 @@ export default function ChatPage() {
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch, question, top_k: 5, mode: chatMode }),
+        body: JSON.stringify({
+          branch,
+          question,
+          top_k: 5,
+          mode: chatMode,
+          user_id: sessionUser?.id ?? "",
+          military_number: sessionUser?.militaryNumber ?? "",
+        }),
       });
 
       if (!res.ok) {
@@ -213,6 +260,8 @@ export default function ChatPage() {
         });
         return;
       }
+
+      const streamChatId = res.headers.get("x-chat-id")?.trim() || undefined;
 
       const reader = res.body?.getReader();
       if (!reader) {
@@ -287,6 +336,17 @@ export default function ChatPage() {
           return n;
         });
       }
+
+      if (streamChatId) {
+        setMessages((prev) => {
+          const n = [...prev];
+          const last = n[n.length - 1];
+          if (last?.role === "assistant") {
+            n[n.length - 1] = { ...last, standardLedger: { chatId: streamChatId } };
+          }
+          return n;
+        });
+      }
     } catch {
       setLastResponseMode(null);
       setSources([]);
@@ -329,6 +389,9 @@ export default function ChatPage() {
   }
 
   function handleTabChange(tab: string) {
+    if (tab === "로그" && !isAdmin) {
+      return;
+    }
     if (tab === "교범 검색") {
       resetDoctrineSearchPage();
     }
@@ -339,6 +402,12 @@ export default function ChatPage() {
 
     setActiveTab(tab);
   }
+
+  useEffect(() => {
+    if (activeTab === "로그" && !isAdmin) {
+      setActiveTab("채팅");
+    }
+  }, [activeTab, isAdmin]);
 
   function handleNewChat() {
     setActiveTab("채팅");

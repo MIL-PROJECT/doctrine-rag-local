@@ -44,7 +44,7 @@ PROMPTS_DIR = (_BACKEND_ROOT / "rag" / "prompts").resolve()
 
 _raw_ollama_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
 OLLAMA_BASE_URL = _raw_ollama_url.rstrip("/") or "http://localhost:11434"
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:8b")
 # OLLAMA_TIMEOUT (초) 또는 OLLAMA_TIMEOUT_SECONDS — 미설정 시 180
 _ollama_timeout = os.getenv("OLLAMA_TIMEOUT_SECONDS") or os.getenv("OLLAMA_TIMEOUT") or "180"
 OLLAMA_TIMEOUT_SECONDS = float(_ollama_timeout)

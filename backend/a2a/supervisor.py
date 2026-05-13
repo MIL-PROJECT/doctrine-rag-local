@@ -1,8 +1,10 @@
 """A2A Supervisor — 질문 분석, 3군 에이전트 위임, 답변 종합"""
-from typing import TypedDict, Any
-from langgraph.graph import StateGraph, END
-from a2a.agents import army_agent, navy_agent, air_agent
-from a2a.audit import record
+from typing import Any, TypedDict
+
+from langgraph.graph import END, StateGraph
+
+from a2a.agents import air_agent, army_agent, navy_agent
+from a2a.audit import emit_blockchain_event, record
 
 
 class A2AState(TypedDict):
@@ -12,11 +14,56 @@ class A2AState(TypedDict):
     answers: dict[str, dict]
     final_answer: str
     task_id: str
+    user_id: str
+    military_number: str
 
 
 ARMY_KEYWORDS = ["육군", "지상작전", "MDMP", "D3A", "ARMY", "기동", "화력", "FM "]
 NAVY_KEYWORDS = ["해군", "해상", "함대", "해양", "NAVY", "JP 3-0", "합동작전", "JP "]
 AIR_KEYWORDS = ["공군", "항공", "F2T2EA", "AIR", "JFACC", "AFDP", "공역", "ATO"]
+
+
+def _actor_audit(user_id: str, military_number: str) -> dict[str, str]:
+    return {"user_id": user_id, "military_number": military_number}
+
+
+def _attach_blockchain(
+    response: dict[str, Any],
+    task_id: str,
+    question: str,
+    user_id: str,
+    military_number: str,
+) -> None:
+    try:
+        from blockchain.audit_event import build_task_event
+
+        bc_event = build_task_event(
+            task_id=task_id,
+            question=question,
+            final_answer=str(response.get("final_answer", "")),
+            branches_consulted=list(response.get("branches_consulted") or []),
+            answers_by_branch=dict(response.get("answers_by_branch") or {}),
+            all_sources=list(response.get("all_sources") or []),
+            from_cache=bool(response.get("from_cache", False)),
+            user_id=user_id or None,
+            military_number=military_number or None,
+        )
+        bc_result = emit_blockchain_event(bc_event)
+        if not bc_result.get("skipped"):
+            integ = bc_result.get("integrity") or {}
+            response["blockchain"] = {
+                "chain_index": integ.get("chain_index"),
+                "event_hash": integ.get("event_hash"),
+                "previous_hash": integ.get("previous_hash"),
+            }
+        else:
+            response["blockchain"] = {
+                "skipped": True,
+                "reason": str(bc_result.get("reason", "unknown")),
+            }
+    except Exception as e:
+        record("blockchain_hook_failed", {"task_id": task_id, "error": str(e)[:200]})
+        response["blockchain"] = {"skipped": True, "reason": "exception", "error": str(e)[:200]}
 
 
 def analyze_question(state: A2AState) -> A2AState:
@@ -33,11 +80,15 @@ def analyze_question(state: A2AState) -> A2AState:
     if not targets:
         targets = ["army", "navy", "air_force"]
 
-    record("supervisor_analyzed", {
-        "task_id": state["task_id"],
-        "question": q,
-        "target_branches": targets,
-    })
+    record(
+        "supervisor_analyzed",
+        {
+            "task_id": state["task_id"],
+            "question": q,
+            "target_branches": targets,
+            **_actor_audit(state["user_id"], state["military_number"]),
+        },
+    )
 
     return {**state, "target_branches": targets, "answers": {}}
 
@@ -45,13 +96,20 @@ def analyze_question(state: A2AState) -> A2AState:
 def invoke_agents(state: A2AState) -> A2AState:
     answers = {}
     branch_map = {"army": army_agent, "navy": navy_agent, "air_force": air_agent}
+    payload = {
+        "user_id": state["user_id"],
+        "military_number": state["military_number"],
+    }
 
     for branch in state["target_branches"]:
         agent = branch_map[branch]
-        result = agent.invoke({
-            "question": state["question"],
-            "top_k": state["top_k"],
-        })
+        result = agent.invoke(
+            {
+                "question": state["question"],
+                "top_k": state["top_k"],
+                **payload,
+            }
+        )
         answers[branch] = result
 
     return {**state, "answers": answers}
@@ -72,12 +130,16 @@ def synthesize_answer(state: A2AState) -> A2AState:
             parts.append(result["answer"])
         final = "\n".join(parts)
 
-    record("supervisor_synthesized", {
-        "task_id": state["task_id"],
-        "branches_consulted": list(answers.keys()),
-        "synthesis_mode": "concat",
-        "final_answer_length": len(final),
-    })
+    record(
+        "supervisor_synthesized",
+        {
+            "task_id": state["task_id"],
+            "branches_consulted": list(answers.keys()),
+            "synthesis_mode": "concat",
+            "final_answer_length": len(final),
+            **_actor_audit(state["user_id"], state["military_number"]),
+        },
+    )
 
     return {**state, "final_answer": final}
 
@@ -99,35 +161,56 @@ def build_supervisor_graph():
 supervisor = build_supervisor_graph()
 
 
-def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]:
+def run_a2a_task(
+    question: str,
+    task_id: str,
+    top_k: int = 10,
+    user_id: str | None = None,
+    military_number: str | None = None,
+) -> dict[str, Any]:
     from a2a import cache
 
-    record("task_received", {"task_id": task_id, "question": question})
+    uid = (user_id or "").strip()
+    mid = (military_number or "").strip()
+    act = _actor_audit(uid, mid)
+
+    record("task_received", {"task_id": task_id, "question": question, **act})
 
     cached = cache.get(question, top_k)
     if cached is not None:
-        record("cache_hit", {
-            "task_id": task_id,
-            "question": question,
-        })
+        record(
+            "cache_hit",
+            {
+                "task_id": task_id,
+                "question": question,
+                **act,
+            },
+        )
         response = dict(cached["response"])
         response["task_id"] = task_id
         response["from_cache"] = True
+        response["actor"] = {"user_id": uid, "military_number": mid}
+        _attach_blockchain(response, task_id, question, uid, mid)
         return response
 
-    result = supervisor.invoke({
-        "question": question,
-        "top_k": top_k,
-        "target_branches": [],
-        "answers": {},
-        "final_answer": "",
-        "task_id": task_id,
-    })
+    result = supervisor.invoke(
+        {
+            "question": question,
+            "top_k": top_k,
+            "target_branches": [],
+            "answers": {},
+            "final_answer": "",
+            "task_id": task_id,
+            "user_id": uid,
+            "military_number": mid,
+        }
+    )
 
     response = {
         "task_id": task_id,
         "status": "completed",
         "question": question,
+        "actor": {"user_id": uid, "military_number": mid},
         "branches_consulted": result["target_branches"],
         "answers_by_branch": {
             br: {
@@ -138,22 +221,30 @@ def run_a2a_task(question: str, task_id: str, top_k: int = 10) -> dict[str, Any]
             for br, a in result["answers"].items()
         },
         "final_answer": result["final_answer"],
-        "all_sources": [
-            src for a in result["answers"].values() for src in a["sources"]
-        ],
+        "all_sources": [src for a in result["answers"].values() for src in a["sources"]],
     }
 
     if result.get("answers"):
         cache.put(question, top_k, response)
-        record("cache_stored", {
-            "task_id": task_id,
-            "question": question,
-        })
+        record(
+            "cache_stored",
+            {
+                "task_id": task_id,
+                "question": question,
+                **act,
+            },
+        )
 
-    record("task_completed", {
-        "task_id": task_id,
-        "branches_consulted": result["target_branches"],
-        "total_sources": len(response["all_sources"]),
-    })
+    _attach_blockchain(response, task_id, question, uid, mid)
+
+    record(
+        "task_completed",
+        {
+            "task_id": task_id,
+            "branches_consulted": result["target_branches"],
+            "total_sources": len(response["all_sources"]),
+            **act,
+        },
+    )
 
     return response

@@ -19,13 +19,22 @@ export async function POST(request: NextRequest) {
   const top_k =
     typeof raw === "number" && raw >= 1 ? Math.min(Math.floor(raw), cap) : Math.min(5, cap);
   const backend = getInternalApiBaseUrl();
+  const user_id = typeof body.user_id === "string" ? body.user_id.trim() : "";
+  const military_number = typeof body.military_number === "string" ? body.military_number.trim() : "";
 
   let upstream: Response;
   try {
     upstream = await fetch(`${backend}/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branch, question, top_k, mode }),
+      body: JSON.stringify({
+        branch,
+        question,
+        top_k,
+        mode,
+        ...(user_id ? { user_id } : {}),
+        ...(military_number ? { military_number } : {}),
+      }),
     });
   } catch {
     return NextResponse.json(
@@ -42,13 +51,19 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const chatIdHdr = upstream.headers.get("x-chat-id");
+  const outHeaders: Record<string, string> = {
+    "Content-Type": "application/x-ndjson; charset=utf-8",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  };
+  if (chatIdHdr) {
+    outHeaders["X-Chat-Id"] = chatIdHdr;
+  }
+
   return new NextResponse(upstream.body, {
     status: 200,
-    headers: {
-      "Content-Type": "application/x-ndjson; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
+    headers: outHeaders,
   });
 }

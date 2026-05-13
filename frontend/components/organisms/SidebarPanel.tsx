@@ -344,20 +344,20 @@ const LogoutButton = styled.button`
   width: 100%;
   margin-top: 0.25rem;
   border-radius: 0.75rem;
-  border: 1px solid #fecaca;
-  background: #fef2f2;
+  border: 2px solid color-mix(in srgb, var(--text-primary) 10%, var(--border));
+  background: transparent;
   padding: 0.65rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 700;
-  color: #b91c1c;
+  color: var(--text-secondary);
   cursor: pointer;
 
   &:hover {
-    background: #fee2e2;
+    background: var(--control-hover);
   }
 
   &:focus-visible {
-    outline: 2px solid #ef4444;
+    outline: 2px solid var(--branch-accent);
     outline-offset: 2px;
   }
 `;
@@ -384,6 +384,7 @@ export function SidebarPanel({
   onLogout,
 }: SidebarPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isAdmin = Boolean(sessionUser?.permissions.includes("ADMIN"));
   const modelLabel = health?.ollama?.model ?? health?.ollama_model ?? "—";
   const ollamaReachable = health?.ollama?.reachable ?? health?.ollama_reachable;
   const chunkCount = health?.chroma_documents ?? health?.vector_db?.documents;
@@ -466,6 +467,18 @@ export function SidebarPanel({
             Ollama: {ollamaReachable === undefined ? "—" : ollamaReachable ? "연결됨" : "끊김"} · 인제스트 플래그:{" "}
             {health?.ingest_flag === undefined ? "—" : health.ingest_flag ? "있음" : "없음"}
           </HealthHint>
+          {isAdmin ? (
+            <HealthHint style={{ marginTop: "0.35rem" }}>
+              로그:{" "}
+              {health?.blockchain?.error
+                ? `조회 실패 (${health.blockchain.error.slice(0, 40)})`
+                : health?.blockchain?.ledger_enabled
+                  ? health.blockchain.chain_valid === false
+                    ? "변조 의심(검증 실패)"
+                    : `ON · 이벤트 ${health.blockchain.ledger_events ?? 0}건`
+                  : "OFF"}
+            </HealthHint>
+          ) : null}
         </InfoCard>
         <SettingsButton type="button" onClick={() => setSettingsOpen((v) => !v)}>
           <Icon name="settings" size={20} />

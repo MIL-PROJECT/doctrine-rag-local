@@ -18,7 +18,7 @@ from llm import ollama_health_status
 from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest, iter_chat_stream_ndjson
 import vector_store
 from a2a.supervisor import run_a2a_task
-from a2a.audit import read_recent
+from a2a.audit import read_recent, record, emit_blockchain_event
 
 logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL, logging.INFO),
@@ -65,6 +65,55 @@ class ChatRequest(BaseModel):
     question: str = Field(..., min_length=1)
     top_k: int = Field(default=5, ge=1, le=config.TOP_K_MAX)
     mode: Literal["auto", "rag", "general"] = Field(default="auto")
+    user_id: str | None = Field(default=None)
+    military_number: str | None = Field(default=None)
+
+
+def _audit_actor_chat(body: ChatRequest) -> dict[str, str]:
+    uid = body.user_id.strip() if body.user_id else ""
+    mid = body.military_number.strip() if body.military_number else ""
+    return {"user_id": uid, "military_number": mid}
+
+
+def _audit_question_preview(q: str, limit: int = 500) -> str:
+    s = q.strip()
+    if len(s) <= limit:
+        return s
+    return s[:limit] + "…"
+
+
+def _emit_standard_chat_ledger_entry(
+    *,
+    chat_id: str,
+    question: str,
+    answer: str,
+    sources: list[Any],
+    branch: str,
+    mode: str | None,
+    pipeline: str,
+    body: ChatRequest,
+    route_reason: Any = None,
+    route_confidence: Any = None,
+    stream_error: str | None = None,
+) -> dict[str, Any]:
+    from blockchain.audit_event import build_standard_chat_ledger_payload
+
+    return emit_blockchain_event(
+        build_standard_chat_ledger_payload(
+            chat_id,
+            question,
+            answer,
+            sources,
+            branch=branch,
+            mode=mode,
+            pipeline=pipeline,
+            route_reason=route_reason,
+            route_confidence=route_confidence,
+            user_id=body.user_id,
+            military_number=body.military_number,
+            stream_error=stream_error,
+        )
+    )
 
 
 class ChatResponse(BaseModel):
@@ -74,6 +123,7 @@ class ChatResponse(BaseModel):
     sources: list[dict[str, Any]]
     route_reason: str | None = None
     route_confidence: float | None = None
+    chat_id: str | None = None
 
 
 class RetrieveRequest(BaseModel):
@@ -98,6 +148,20 @@ def health() -> dict[str, Any]:
     else:
         ollama_block["error"] = ollama.get("error") or "Remote Ollama server unavailable"
 
+    block: dict[str, Any] = {"ledger_enabled": False}
+    try:
+        from blockchain import config as _bc
+        from blockchain.verifier import verify_chain as _verify_chain
+
+        _v = _verify_chain()
+        block = {
+            "ledger_enabled": _bc.BLOCKCHAIN_ENABLED,
+            "chain_valid": _v.get("valid"),
+            "ledger_events": _v.get("total_events"),
+        }
+    except Exception as e:
+        block = {"ledger_enabled": False, "error": str(e)[:120]}
+
     return {
         "api": "ok",
         "status": "ok",
@@ -117,6 +181,7 @@ def health() -> dict[str, Any]:
         "ingest_in_progress": INGEST_IN_PROGRESS,
         "chunks_data_dir": config.CHUNKS_PATH_DISPLAY,
         "top_k_max": config.TOP_K_MAX,
+        "blockchain": block,
     }
 
 
@@ -189,42 +254,160 @@ async def source_documents(branch: str = "navy") -> dict[str, Any]:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest) -> ChatResponse:
+    chat_id = str(uuid.uuid4())
+    q = body.question.strip()
+    record(
+        "standard_chat_received",
+        {
+            "chat_id": chat_id,
+            "pipeline": "standard_sync",
+            "branch": body.branch,
+            "mode": body.mode,
+            "top_k": body.top_k,
+            "question_preview": _audit_question_preview(q),
+            "question_length": len(q),
+            **_audit_actor_chat(body),
+        },
+    )
     try:
 
         def _ask() -> dict[str, Any]:
-            return ask_question(body.question.strip(), branch=body.branch, top_k=body.top_k, mode=body.mode)
+            return ask_question(q, branch=body.branch, top_k=body.top_k, mode=body.mode)
 
         data = await run_in_threadpool(_ask)
         mode_val = "rag" if str(data.get("mode")) == "rag" else "general"
+        ans = str(data.get("answer") or "")
+        srcs = data.get("sources") or []
+        record(
+            "standard_chat_completed",
+            {
+                "chat_id": chat_id,
+                "pipeline": "standard_sync",
+                "mode": mode_val,
+                "branch": str(data.get("branch") or body.branch),
+                "answer_length": len(ans),
+                "sources_count": len(srcs) if isinstance(srcs, list) else 0,
+                "route_reason": data.get("route_reason"),
+                "route_confidence": data.get("route_confidence"),
+                **_audit_actor_chat(body),
+            },
+        )
+        _emit_standard_chat_ledger_entry(
+            chat_id=chat_id,
+            question=q,
+            answer=ans,
+            sources=srcs if isinstance(srcs, list) else [],
+            branch=str(data.get("branch") or body.branch),
+            mode=mode_val,
+            pipeline="standard_sync",
+            body=body,
+            route_reason=data.get("route_reason"),
+            route_confidence=data.get("route_confidence"),
+        )
         return ChatResponse(
             mode=mode_val,
             branch=str(data.get("branch") or body.branch),
-            answer=str(data.get("answer") or ""),
-            sources=data.get("sources") or [],
+            answer=ans,
+            sources=srcs if isinstance(srcs, list) else [],
             route_reason=str(data.get("route_reason")) if data.get("route_reason") is not None else None,
             route_confidence=float(data.get("route_confidence")) if data.get("route_confidence") is not None else None,
+            chat_id=chat_id,
         )
     except ValueError as e:
+        record(
+            "standard_chat_failed",
+            {"chat_id": chat_id, "pipeline": "standard_sync", "error": str(e), **_audit_actor_chat(body)},
+        )
         raise HTTPException(status_code=400, detail=str(e)) from e
     except RuntimeError as e:
+        record(
+            "standard_chat_failed",
+            {"chat_id": chat_id, "pipeline": "standard_sync", "error": str(e), **_audit_actor_chat(body)},
+        )
         raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @app.post("/chat/stream")
 async def chat_stream(body: ChatRequest):
     """NDJSON 스트림 — 한 줄에 JSON 하나: meta → delta* → done. Ollama stream: true."""
+    chat_id = str(uuid.uuid4())
+    q = body.question.strip()
+    record(
+        "standard_chat_received",
+        {
+            "chat_id": chat_id,
+            "pipeline": "standard_stream",
+            "branch": body.branch.strip() or "navy",
+            "mode": body.mode,
+            "top_k": body.top_k,
+            "question_preview": _audit_question_preview(q),
+            "question_length": len(q),
+            **_audit_actor_chat(body),
+        },
+    )
 
     def ndjson_bytes():
+        meta: dict[str, Any] = {}
+        delta_chars = 0
+        answer_accumulated = ""
+        err_detail: str | None = None
         try:
             for line in iter_chat_stream_ndjson(
-                body.question.strip(),
+                q,
                 body.branch.strip() or "navy",
                 body.top_k,
                 body.mode,
             ):
                 yield line.encode("utf-8")
+                try:
+                    obj = json.loads(line.strip())
+                    t = obj.get("type")
+                    if t == "meta" and isinstance(obj, dict):
+                        meta = obj
+                    elif t == "delta":
+                        chunk = str(obj.get("text") or "")
+                        delta_chars += len(chunk)
+                        answer_accumulated += chunk
+                    elif t == "error":
+                        err_detail = str(obj.get("detail") or "")
+                except (json.JSONDecodeError, TypeError):
+                    pass
         except ValueError as e:
+            err_detail = str(e)
             yield (json.dumps({"type": "error", "detail": str(e)}, ensure_ascii=False) + "\n").encode("utf-8")
+        finally:
+            sources = meta.get("sources") if isinstance(meta.get("sources"), list) else []
+            record(
+                "standard_chat_completed",
+                {
+                    "chat_id": chat_id,
+                    "pipeline": "standard_stream",
+                    "mode": meta.get("mode"),
+                    "branch": meta.get("branch"),
+                    "sources_count": len(sources),
+                    "answer_chars_streamed": delta_chars,
+                    "route_reason": meta.get("route_reason"),
+                    "route_confidence": meta.get("route_confidence"),
+                    "error": err_detail,
+                    **_audit_actor_chat(body),
+                },
+            )
+            br = str(meta.get("branch") or body.branch.strip() or "navy")
+            md = meta.get("mode")
+            mode_out: str | None = str(md) if md is not None else None
+            _emit_standard_chat_ledger_entry(
+                chat_id=chat_id,
+                question=q,
+                answer=answer_accumulated,
+                sources=sources,
+                branch=br,
+                mode=mode_out,
+                pipeline="standard_stream",
+                body=body,
+                route_reason=meta.get("route_reason"),
+                route_confidence=meta.get("route_confidence"),
+                stream_error=err_detail,
+            )
 
     return StreamingResponse(
         ndjson_bytes(),
@@ -233,6 +416,7 @@ async def chat_stream(body: ChatRequest):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Chat-Id": chat_id,
         },
     )
 
@@ -273,16 +457,22 @@ class A2ATaskRequest(BaseModel):
     question: str
     top_k: int = 10
     task_id: str | None = None
+    user_id: str | None = None
+    military_number: str | None = None
 
 
 @app.post("/a2a/task")
 async def execute_a2a_task(req: A2ATaskRequest):
     """A2A Task 실행 — Supervisor 패턴으로 3군 에이전트 협업."""
     task_id = req.task_id or str(uuid.uuid4())
+    uid = req.user_id.strip() if req.user_id else ""
+    mid = req.military_number.strip() if req.military_number else ""
     return run_a2a_task(
         question=req.question,
         task_id=task_id,
         top_k=req.top_k,
+        user_id=uid or None,
+        military_number=mid or None,
     )
 
 
@@ -309,3 +499,37 @@ async def clear_cache():
     if CACHE_PATH.exists():
         CACHE_PATH.unlink()
     return {"status": "cleared"}
+
+
+@app.get("/a2a/ledger/settings")
+def a2a_ledger_settings() -> dict[str, Any]:
+    from blockchain import config as bc
+
+    return {
+        "enabled": bc.BLOCKCHAIN_ENABLED,
+        "ledger_path": str(bc.LOCAL_LEDGER_PATH),
+        "hash_algorithm": bc.HASH_ALGORITHM,
+    }
+
+
+@app.get("/a2a/ledger/verify")
+def a2a_ledger_verify() -> dict[str, Any]:
+    from blockchain.verifier import verify_chain
+
+    return verify_chain()
+
+
+@app.get("/a2a/ledger/recent")
+def a2a_ledger_recent(limit: int = 25) -> dict[str, Any]:
+    from blockchain.local_ledger import get_latest_events
+
+    lim = max(1, min(limit, 100))
+    return {"events": get_latest_events(lim)}
+
+
+@app.get("/a2a/ledger/task/{task_id}")
+def a2a_ledger_task_verify(task_id: str) -> dict[str, Any]:
+    """원장 단건 검증 — 경로 이름은 task_id 이지만 A2A task_id와 표준 채팅 chat_id 모두 허용."""
+    from blockchain.verifier import verify_task
+
+    return verify_task(task_id)

@@ -15,6 +15,8 @@ def _make_branch_runnable(branch: str):
             "branch": branch,
             "question": question,
             "top_k": top_k,
+            "user_id": str(inputs.get("user_id") or ""),
+            "military_number": str(inputs.get("military_number") or ""),
         })
 
         result = ask_question(
@@ -29,6 +31,8 @@ def _make_branch_runnable(branch: str):
             "answer_length": len(result.get("answer", "")),
             "sources_count": len(result.get("sources", [])),
             "mode": result.get("mode"),
+            "user_id": str(inputs.get("user_id") or ""),
+            "military_number": str(inputs.get("military_number") or ""),
         })
 
         return {

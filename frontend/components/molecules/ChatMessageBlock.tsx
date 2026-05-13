@@ -2,7 +2,7 @@
 
 import { AvatarCircle } from "@/components/atoms/AvatarCircle";
 import { Icon } from "@/components/atoms/Icon";
-import type { ChatMessage } from "@/lib/types";
+import type { A2aLedgerChip, ChatMessage, StandardLedgerChip } from "@/lib/types";
 import { useMemo, useState } from "react";
 import styled, { css } from "styled-components";
 
@@ -166,6 +166,37 @@ function summaryLine(label: "육군" | "해군" | "공군", body: string): strin
   return `${label}: ${compact || "요약 정보 없음"}`;
 }
 
+const LedgerStrip = styled.div`
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px dashed color-mix(in srgb, var(--branch-accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--surface-muted) 90%, var(--branch-accent) 10%);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+`;
+
+function formatLedgerLine(chip: A2aLedgerChip): string {
+  if (chip.skipped) {
+    const r = chip.reason ?? "unknown";
+    const ex = chip.error ? ` (${chip.error})` : "";
+    return `로그: 건너뜀 · ${r}${ex}`;
+  }
+  const idx = chip.chainIndex != null ? `#${chip.chainIndex}` : "—";
+  const h = chip.eventHash ? `${chip.eventHash.slice(0, 16)}…` : "—";
+  const tc = chip.fromCache ? " · 캐시" : "";
+  const tid = chip.taskId ? ` · task ${chip.taskId.slice(0, 8)}…` : "";
+  return `로컬 해시 로그 ${idx} · event ${h}${tc}${tid}`;
+}
+
+function formatStandardLedgerLine(chip: StandardLedgerChip): string {
+  const id = chip.chatId || "";
+  const short = id.length > 12 ? `${id.slice(0, 8)}…` : id;
+  return `해시 원장 기록 ID · chat ${short} · 로그 탭에서 단건 검증`;
+}
+
 type ChatMessageBlockProps = {
   message: ChatMessage;
   index: number;
@@ -230,6 +261,12 @@ export function ChatMessageBlock({ message, index }: ChatMessageBlockProps) {
         ) : (
           <Content>{message.content}</Content>
         )}
+        {message.role === "assistant" && message.standardLedger ? (
+          <LedgerStrip>{formatStandardLedgerLine(message.standardLedger)}</LedgerStrip>
+        ) : null}
+        {message.role === "assistant" && message.a2aLedger ? (
+          <LedgerStrip>{formatLedgerLine(message.a2aLedger)}</LedgerStrip>
+        ) : null}
       </Body>
     </Row>
   );

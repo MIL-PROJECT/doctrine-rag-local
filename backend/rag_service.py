@@ -274,6 +274,60 @@ def _answer_common_parallel_rag(question: str, top_k: int) -> dict[str, Any]:
 
 def list_indexed_documents(branch: str) -> dict[str, Any]:
     """군별 컬렉션에서 문서 단위 메타데이터를 집계."""
+    if branch == "common":
+        merged: dict[str, dict[str, Any]] = {}
+        has_any_index = False
+        for b in config.SERVICE_BRANCHES:
+            part = list_indexed_documents(b)
+            docs = part.get("documents") or []
+            if docs:
+                has_any_index = True
+            for d in docs:
+                key = str(d.get("doc_id") or d.get("document_no") or d.get("title") or "").strip()
+                if not key:
+                    continue
+                row = merged.get(key)
+                if row is None:
+                    row = {
+                        "doc_id": key,
+                        "title": str(d.get("title") or key),
+                        "source": d.get("source"),
+                        "document_no": str(d.get("document_no") or key),
+                        "chunk_count": 0,
+                        "keywords": set(),
+                        "branches": set(),
+                    }
+                    merged[key] = row
+                row["chunk_count"] = int(row["chunk_count"]) + int(d.get("chunk_count") or 0)
+                row["branches"].add(b)
+                for kw in d.get("keywords") or []:
+                    if isinstance(kw, str) and kw.strip():
+                        row["keywords"].add(kw.strip())
+
+        if not has_any_index:
+            return {"branch": "common", "indexed": False, "documents": []}
+
+        items: list[dict[str, Any]] = []
+        branch_ko = {"army": "육군", "navy": "해군", "air_force": "공군"}
+        for row in merged.values():
+            branches = sorted(list(row["branches"]))
+            branch_tags = [f"군:{branch_ko.get(b, b)}" for b in branches]
+            keywords = sorted(list(row["keywords"]))
+            items.append(
+                {
+                    "doc_id": row["doc_id"],
+                    "title": row["title"],
+                    "source": row["source"],
+                    "document_no": row["document_no"],
+                    "chunk_count": row["chunk_count"],
+                    "keywords": [*branch_tags, *keywords],
+                    "branches": branches,
+                }
+            )
+
+        items.sort(key=lambda x: (str(x["title"]).lower(), str(x["doc_id"]).lower()))
+        return {"branch": "common", "indexed": True, "documents": items}
+
     if branch not in config.SERVICE_BRANCHES:
         raise ValueError(f"Invalid branch: {branch}")
 
@@ -536,6 +590,16 @@ def ask_question(question: str, branch: str, top_k: int = 5, mode: str = "auto")
     if mode not in ("auto", "rag", "general"):
         raise ValueError("Invalid mode. Use one of: auto, rag, general")
     if branch == "common":
+        # 합참(common)에서도 "일반 채팅"을 선택하면 3군 병렬 RAG 대신 일반 LLM 응답으로 우회
+        if mode == "general":
+            return {
+                "mode": "general",
+                "branch": "common",
+                "answer": generate_general_answer(q, branch="common"),
+                "sources": [],
+                "route_reason": "common_forced_general",
+                "route_confidence": 1.0,
+            }
         return _answer_common_parallel_rag(q, top_k)
 
     if branch not in config.SERVICE_BRANCHES:

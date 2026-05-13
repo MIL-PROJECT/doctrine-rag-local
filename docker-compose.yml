@@ -9,6 +9,8 @@ services:
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
+      A2A_BLOCKCHAIN_ENABLED: ${A2A_BLOCKCHAIN_ENABLED:-false}
+      A2A_CACHE_ENABLED: ${A2A_CACHE_ENABLED:-false}
       HF_HOME: /app/.cache/huggingface
       TRANSFORMERS_CACHE: /app/.cache/huggingface
       CHROMA_DIR: chroma_db

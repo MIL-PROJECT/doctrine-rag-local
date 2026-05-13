@@ -16,12 +16,21 @@ export async function POST(request: NextRequest) {
   const top_k =
     typeof raw === "number" && raw >= 1 ? Math.min(Math.floor(raw), cap) : Math.min(5, cap);
   const backend = getInternalApiBaseUrl();
+  const user_id = typeof body.user_id === "string" ? body.user_id.trim() : "";
+  const military_number = typeof body.military_number === "string" ? body.military_number.trim() : "";
 
   try {
     const res = await fetch(`${backend}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ branch, question, top_k, mode }),
+      body: JSON.stringify({
+        branch,
+        question,
+        top_k,
+        mode,
+        ...(user_id ? { user_id } : {}),
+        ...(military_number ? { military_number } : {}),
+      }),
     });
 
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
       sources: Array.isArray(data.sources) ? data.sources : [],
       route_reason: typeof data.route_reason === "string" ? data.route_reason : undefined,
       route_confidence: typeof data.route_confidence === "number" ? data.route_confidence : undefined,
+      chat_id: typeof data.chat_id === "string" ? data.chat_id : undefined,
     });
   } catch {
     return NextResponse.json({ detail: "백엔드에 연결할 수 없습니다. API URL과 서버 기동을 확인하세요." }, { status: 502 });

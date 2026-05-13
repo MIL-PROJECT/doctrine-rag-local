@@ -5,7 +5,7 @@ import { bp } from "@/lib/breakpoints";
 import NextImage from "next/image";
 import styled, { css } from "styled-components";
 
-const TABS = ["채팅", "교범 검색", "출처 문서"] as const;
+const TABS = ["채팅", "교범 검색", "출처 문서", "로그"] as const;
 
 const Shell = styled.header<{ $branch: "common" | "army" | "navy" | "air_force" }>`
   position: sticky;
@@ -15,10 +15,10 @@ const Shell = styled.header<{ $branch: "common" | "army" | "navy" | "air_force" 
     $branch === "army"
       ? "linear-gradient(to right, #052e16, #166534, #14532d)"
       : $branch === "navy"
-        ? "linear-gradient(to right, #020617, #1e40af, #1e293b)"
+        ? "linear-gradient(to right, #111827, #4b5563, #111827)"
         : $branch === "air_force"
           ? "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"
-          : "linear-gradient(to right, #111827, #000000, #111827)"};
+          : "linear-gradient(to right, #020617, #1e40af, #1e293b)"};
   color: #fff;
   box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.35);
   backdrop-filter: saturate(1.15) blur(10px);
@@ -218,6 +218,7 @@ type AppHeaderProps = {
   onTabChange: (tab: string) => void;
   branch: "common" | "army" | "navy" | "air_force";
   onBranchChange: (branch: "common" | "army" | "navy" | "air_force") => void;
+  showLogTab?: boolean;
 };
 
 const BranchTabs = styled.div`
@@ -258,10 +259,11 @@ const BranchButton = styled.button<{ $active: boolean }>`
 `;
 
 function branchLabel(id: "common" | "army" | "navy" | "air_force") {
-  return id === "common" ? "공통" : id === "army" ? "육군" : id === "navy" ? "해군" : "공군";
+  return id === "common" ? "합참" : id === "army" ? "육군" : id === "navy" ? "해군" : "공군";
 }
 
-export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: AppHeaderProps) {
+export function AppHeader({ activeTab, onTabChange, branch, onBranchChange, showLogTab = true }: AppHeaderProps) {
+  const visibleTabs = showLogTab ? TABS : TABS.filter((tab) => tab !== "로그");
   return (
     <Shell $branch={branch}>
       <Inner>
@@ -283,7 +285,7 @@ export function AppHeader({ activeTab, onTabChange, branch, onBranchChange }: Ap
         </Brand>
 
         <Nav aria-label="주 메뉴">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <NavTabButton key={tab} label={tab} active={activeTab === tab} onClick={() => onTabChange(tab)} />
           ))}
         </Nav>

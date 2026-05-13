@@ -5,6 +5,7 @@ import { ChatWorkspace } from "@/components/organisms/ChatWorkspace";
 import { ReferenceSourcesPanel } from "@/components/organisms/ReferenceSourcesPanel";
 import { SidebarPanel } from "@/components/organisms/SidebarPanel";
 import { DoctrineSearchWorkspace } from "@/components/organisms/DoctrineSearchWorkspace";
+import { LedgerWorkspace } from "@/components/organisms/LedgerWorkspace";
 import { SourceDocumentsWorkspace } from "@/components/organisms/SourceDocumentsWorkspace";
 import { bp } from "@/lib/breakpoints";
 import type { DoctrineUser } from "@/lib/auth";
@@ -41,20 +42,20 @@ const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
           }
         : $branch === "navy"
           ? {
-              a: "#1d4ed8",
-              aDark: "#60a5fa",
-              pageBgLight: "#eff6ff",
-              surfaceMutedLight: "#eff6ff",
-              borderLight: "#bfdbfe",
-              pageBgDark: "#030712",
-              surfaceDark: "#0f1729",
-              surfaceMutedDark: "#152238",
-              borderDark: "#1e40af",
-              gradLight: "linear-gradient(180deg, #eff6ff 0%, #f1f5f9 40%, #f8fafc 100%)",
-              gradDark: "linear-gradient(180deg, #0c1929 0%, #050c18 25%, #020617 55%)",
-              convTimeLight: "rgba(255,255,255,0.9)",
-              convTimeDark: "#bfdbfe",
-              surfaceHoverLight: "#dbeafe",
+              a: "#4b5563",
+              aDark: "#d1d5db",
+              pageBgLight: "#e5e7eb",
+              surfaceMutedLight: "#d1d5db",
+              borderLight: "#9ca3af",
+              pageBgDark: "#1f2937",
+              surfaceDark: "#2f3b4d",
+              surfaceMutedDark: "#374151",
+              borderDark: "#6b7280",
+              gradLight: "linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 45%, #d1d5db 100%)",
+              gradDark: "linear-gradient(180deg, #4b5563 0%, #374151 45%, #1f2937 100%)",
+              convTimeLight: "rgba(31,41,55,0.85)",
+              convTimeDark: "#e5e7eb",
+              surfaceHoverLight: "#cbd5e1",
             }
           : $branch === "air_force"
             ? {
@@ -74,20 +75,20 @@ const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
               surfaceHoverLight: "#ede9fe",
             }
             : {
-                a: "#4b5563",
-                aDark: "#d1d5db",
-                pageBgLight: "#e5e7eb",
-                surfaceMutedLight: "#d1d5db",
-                borderLight: "#9ca3af",
-                pageBgDark: "#1f2937",
-                surfaceDark: "#2f3b4d",
-                surfaceMutedDark: "#374151",
-                borderDark: "#6b7280",
-                gradLight: "linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 45%, #d1d5db 100%)",
-                gradDark: "linear-gradient(180deg, #4b5563 0%, #374151 45%, #1f2937 100%)",
-                convTimeLight: "rgba(31,41,55,0.85)",
-                convTimeDark: "#e5e7eb",
-                surfaceHoverLight: "#cbd5e1",
+                a: "#1d4ed8",
+                aDark: "#60a5fa",
+                pageBgLight: "#eff6ff",
+                surfaceMutedLight: "#eff6ff",
+                borderLight: "#bfdbfe",
+                pageBgDark: "#030712",
+                surfaceDark: "#0f1729",
+                surfaceMutedDark: "#152238",
+                borderDark: "#1e40af",
+                gradLight: "linear-gradient(180deg, #eff6ff 0%, #f1f5f9 40%, #f8fafc 100%)",
+                gradDark: "linear-gradient(180deg, #0c1929 0%, #050c18 25%, #020617 55%)",
+                convTimeLight: "rgba(255,255,255,0.9)",
+                convTimeDark: "#bfdbfe",
+                surfaceHoverLight: "#dbeafe",
               };
 
     if ($darkMode) {
@@ -106,19 +107,19 @@ const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
     --text-subtle: #64748b;
     --link-accent: ${t.aDark};
     --input-bg: ${t.surfaceMutedDark};
-    --control-bg: ${$branch === "common" ? "#ffffff" : t.surfaceMutedDark};
-    --control-hover: ${$branch === "common" ? "#f3f4f6" : "#3d4f60"};
-    --send-bg: ${$branch === "common" ? "#ffffff" : t.aDark};
-    --send-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
+    --control-bg: ${t.surfaceMutedDark};
+    --control-hover: #3d4f60;
+    --send-bg: ${t.aDark};
+    --send-fg: #ffffff;
     --rank-bg: ${t.aDark}22;
     --shadow-raised: 0 1px 3px rgb(0 0 0 / 0.35);
-    --conversation-active-bg: ${$branch === "common" ? "#ffffff" : t.surfaceMutedDark};
-    --conversation-active-fg: ${$branch === "common" ? "#111111" : "#f8fafc"};
-    --conversation-active-border: ${$branch === "common" ? "#9ca3af" : t.aDark};
-    --conversation-time-active: ${$branch === "common" ? "#374151" : t.convTimeDark};
-    --sidebar-primary-btn-bg: ${$branch === "common" ? "#ffffff" : t.aDark};
-    --sidebar-primary-btn-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
-    --sidebar-primary-btn-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
+    --conversation-active-bg: ${t.surfaceMutedDark};
+    --conversation-active-fg: #f8fafc;
+    --conversation-active-border: ${t.aDark};
+    --conversation-time-active: ${t.convTimeDark};
+    --sidebar-primary-btn-bg: ${t.aDark};
+    --sidebar-primary-btn-fg: #ffffff;
+    --sidebar-primary-btn-border: transparent;
     --avatar-user: ${t.aDark};
     --avatar-assistant: #4b5563;
     --mode-success: #5eead4;
@@ -149,18 +150,18 @@ const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
     --link-accent: ${t.a};
     --input-bg: #ffffff;
     --control-bg: #ffffff;
-    --control-hover: ${$branch === "common" ? "#f3f4f6" : t.surfaceMutedLight};
-    --send-bg: ${$branch === "common" ? "#ffffff" : t.a};
-    --send-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
+    --control-hover: ${t.surfaceMutedLight};
+    --send-bg: ${t.a};
+    --send-fg: #ffffff;
     --rank-bg: ${t.surfaceMutedLight};
     --shadow-raised: 0 1px 2px rgb(15 23 42 / 0.07);
-    --conversation-active-bg: ${$branch === "common" ? "#ffffff" : t.a};
-    --conversation-active-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
-    --conversation-active-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
-    --conversation-time-active: ${$branch === "common" ? "#374151" : t.convTimeLight};
-    --sidebar-primary-btn-bg: ${$branch === "common" ? "#ffffff" : t.a};
-    --sidebar-primary-btn-fg: ${$branch === "common" ? "#111111" : "#ffffff"};
-    --sidebar-primary-btn-border: ${$branch === "common" ? "#9ca3af" : "transparent"};
+    --conversation-active-bg: ${t.a};
+    --conversation-active-fg: #ffffff;
+    --conversation-active-border: transparent;
+    --conversation-time-active: ${t.convTimeLight};
+    --sidebar-primary-btn-bg: ${t.a};
+    --sidebar-primary-btn-fg: #ffffff;
+    --sidebar-primary-btn-border: transparent;
     --avatar-user: ${t.a};
     --avatar-assistant: #0f172a;
     --mode-success: #0f766e;
@@ -288,9 +289,16 @@ export function DoctrineRagTemplate({
   sessionUser,
   onLogout,
 }: DoctrineRagTemplateProps) {
+  const isAdmin = Boolean(sessionUser?.permissions.includes("ADMIN"));
   return (
     <Page $darkMode={darkMode} $branch={branch}>
-      <AppHeader activeTab={activeTab} onTabChange={onTabChange} branch={branch} onBranchChange={onBranchChange} />
+      <AppHeader
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+        branch={branch}
+        onBranchChange={onBranchChange}
+        showLogTab={isAdmin}
+      />
 
       <Grid>
         <SidebarPanel
@@ -337,6 +345,8 @@ export function DoctrineRagTemplate({
             onQueryChange={onSourceDocumentQueryChange}
             onFileSelect={onSourcePdfSelect}
           />
+        ) : activeTab === "로그" ? (
+          <LedgerWorkspace />
         ) : (
           <PlaceholderSection>
             <div>

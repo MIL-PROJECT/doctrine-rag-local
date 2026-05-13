@@ -1,6 +1,5 @@
 """A2A 감사 로그 — 모든 에이전트 통신 기록"""
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -31,3 +30,25 @@ def read_recent(limit: int = 50) -> list[dict[str, Any]]:
     with open(AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
     return [json.loads(line) for line in lines[-limit:]]
+
+
+def emit_blockchain_event(event_payload: dict) -> dict:
+    """Append a hash-chained audit row when A2A_BLOCKCHAIN_ENABLED is true.
+
+    On failure or when disabled, returns ``{"skipped": True, ...}`` without raising.
+    """
+    try:
+        from blockchain.config import BLOCKCHAIN_ENABLED
+
+        if not BLOCKCHAIN_ENABLED:
+            return {"skipped": True, "reason": "blockchain_disabled"}
+
+        from blockchain.local_ledger import append_event
+
+        return append_event(event_payload)
+    except Exception as e:
+        try:
+            record("blockchain_emit_failed", {"error": str(e)[:200]})
+        except Exception:
+            pass
+        return {"skipped": True, "reason": "exception", "error": str(e)[:200]}

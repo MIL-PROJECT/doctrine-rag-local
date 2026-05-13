@@ -16,10 +16,29 @@ export type ChatSourceRow = {
   score: string;
 };
 
+export type A2aLedgerChip = {
+  skipped?: boolean;
+  reason?: string;
+  chainIndex?: number;
+  eventHash?: string;
+  previousHash?: string;
+  error?: string;
+  taskId?: string;
+  fromCache?: boolean;
+};
+
+export type StandardLedgerChip = {
+  chatId: string;
+};
+
 export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   time: string;
+  /** A2A 응답에 포함된 로컬 해시 로그 메타(선택) */
+  a2aLedger?: A2aLedgerChip;
+  /** 표준 채팅 스트림의 원장 기록 ID(FastAPI X-Chat-Id)(선택) */
+  standardLedger?: StandardLedgerChip;
 };
 
 export type ChatMode = "auto" | "rag" | "general";
@@ -63,6 +82,12 @@ export type HealthPayload = {
   ingest_mode?: string;
   chunks_data_dir?: string;
   top_k_max?: number;
+  blockchain?: {
+    ledger_enabled?: boolean;
+    chain_valid?: boolean;
+    ledger_events?: number;
+    error?: string;
+  };
 };
 
 export type ChatApiResponse = {

@@ -12,7 +12,7 @@ notepad .env
 
 - **호스트에서 Ollama(11434) 쓸 때:** `OLLAMA_BASE_URL=http://host.docker.internal:11434`
 - **Colab + ngrok:** `OLLAMA_BASE_URL=https://xxxx.ngrok-free.dev` (본인 URL)
-- **`OLLAMA_MODEL`** 은 원격/로컬에 맞게 유지 (예: `qwen2.5:3b`)
+- **`OLLAMA_MODEL`** 은 원격/로컬에 맞게 유지 (예: `qwen3:8b`)
 
 ## 2. 이전 스택 정리 (ollama 컨테이너 등 잔여물 제거)
 

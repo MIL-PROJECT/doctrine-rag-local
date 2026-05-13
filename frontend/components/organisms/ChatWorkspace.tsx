@@ -182,7 +182,9 @@ export function ChatWorkspace({
           <ModeBadge>일반 채팅 응답 · 교리 문서 출처는 사용되지 않았습니다.</ModeBadge>
         )}
         {!busy && lastResponseMode === "a2a" && (
-          <ModeBadge>A2A 슈퍼바이저 응답 · 다수 군 교리 출처가 병합되었을 수 있습니다.</ModeBadge>
+          <ModeBadge>
+            A2A 슈퍼바이저 응답 · 다수 군 교리 출처가 병합되었을 수 있습니다. 상단「로그」탭에서 해시 체인 상태를 확인할 수 있습니다.
+          </ModeBadge>
         )}
         <div ref={messagesEndRef} />
       </MessageViewport>

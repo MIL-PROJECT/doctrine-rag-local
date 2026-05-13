@@ -1,0 +1,16 @@
+import { NextRequest, NextResponse } from "next/server";
+import { getInternalApiBaseUrl } from "@/lib/env";
+
+export async function GET(request: NextRequest) {
+  const limitRaw = request.nextUrl.searchParams.get("limit");
+  const limit = Math.min(100, Math.max(1, Number(limitRaw) || 25));
+
+  const backend = getInternalApiBaseUrl();
+  try {
+    const res = await fetch(`${backend}/a2a/ledger/recent?limit=${limit}`, { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    return NextResponse.json(data, { status: res.status });
+  } catch {
+    return NextResponse.json({ detail: "백엔드에 연결할 수 없습니다." }, { status: 502 });
+  }
+}

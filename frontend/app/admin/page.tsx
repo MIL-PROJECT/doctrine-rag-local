@@ -453,9 +453,9 @@ function AdminPanel() {
     const total = users.length;
     const adminN = users.filter((u) => u.permissions.includes("ADMIN")).length;
     const chatN = users.filter((u) => u.permissions.includes("CHAT")).length;
-    const pending = users.filter((u) => u.permissions.length === 0).length;
+    const pending = pendingChatRequests.length;
     return { total, adminN, chatN, pending };
-  }, [users]);
+  }, [users, pendingChatRequests]);
 
   const filtered = useMemo(() => users.filter((u) => userMatchesQuery(u, query)), [users, query]);
 
@@ -561,7 +561,7 @@ function AdminPanel() {
         <StatCard>
           <StatLabel>승인 대기</StatLabel>
           <StatValue>{stats.pending}</StatValue>
-          <StatHint>권한 없음 (빈 배열)</StatHint>
+          <StatHint>CHAT 권한 요청 대기 건수</StatHint>
         </StatCard>
       </StatsGrid>
 

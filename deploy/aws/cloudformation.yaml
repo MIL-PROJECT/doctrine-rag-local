@@ -139,7 +139,7 @@ Resources:
 
               printf '%s\n' \
                 'OLLAMA_BASE_URL=https://REPLACE_WITH_NGROK_OR_REMOTE_OLLAMA_URL' \
-                'OLLAMA_MODEL=qwen2.5:3b' \
+                'OLLAMA_MODEL=qwen3:8b' \
                 'CHROMA_DIR=chroma_db' \
                 'CHUNKS_DATA_DIR=data/chunks' \
                 'EMBEDDING_MODEL=BAAI/bge-m3' \
