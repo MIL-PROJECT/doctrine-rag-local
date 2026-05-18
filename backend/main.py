@@ -14,7 +14,8 @@ from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 import config
-from llm import ollama_health_status
+from llm import llm_health_status, ollama_health_status
+from llm.factory import resolve_chat_model
 from rag_service import ask_question, full_reset_and_reingest, list_indexed_documents, retrieve_passages, run_startup_ingest, iter_chat_stream_ndjson
 import vector_store
 from a2a.supervisor import run_a2a_task
@@ -162,10 +163,26 @@ def health() -> dict[str, Any]:
     except Exception as e:
         block = {"ledger_enabled": False, "error": str(e)[:120]}
 
+    from llm._utils import run_async
+
+    llm_block: dict[str, Any] = {"provider": config.LLM_PROVIDER}
+    try:
+        llm_h = run_async(llm_health_status())
+        llm_block["base_url"] = llm_h.get("base_url")
+        llm_block["reachable"] = bool(llm_h.get("reachable"))
+        if llm_h.get("error"):
+            llm_block["error"] = llm_h.get("error")
+        if llm_h.get("model"):
+            llm_block["model"] = llm_h.get("model")
+    except Exception as e:
+        llm_block["reachable"] = False
+        llm_block["error"] = str(e)[:120]
+
     return {
         "api": "ok",
         "status": "ok",
         "service": "doctrine-rag-ollama",
+        "llm": llm_block,
         "ollama": ollama_block,
         "vector_db": {
             config.COLLECTION_MAP["army"]: per_branch["army"],
@@ -182,6 +199,62 @@ def health() -> dict[str, Any]:
         "chunks_data_dir": config.CHUNKS_PATH_DISPLAY,
         "top_k_max": config.TOP_K_MAX,
         "blockchain": block,
+    }
+
+
+class LLMTestRequest(BaseModel):
+    branch: str = Field(default="army")
+    message: str = Field(..., min_length=1)
+
+
+@app.get("/llm/health")
+async def llm_health() -> dict[str, Any]:
+    """현재 LLM provider 연결 상태."""
+    status = await llm_health_status()
+    return {
+        "provider": config.LLM_PROVIDER,
+        "base_url": status.get("base_url"),
+        "reachable": bool(status.get("reachable")),
+        "model": status.get("model"),
+        "error": status.get("error"),
+    }
+
+
+@app.post("/llm/test")
+async def llm_test(body: LLMTestRequest) -> dict[str, Any]:
+    """군별 LoRA 모델 연결 테스트 (RAG 없이 단일 completion)."""
+    branch = body.branch.strip()
+    if branch not in (*config.SERVICE_BRANCHES, "air"):
+        raise HTTPException(status_code=400, detail=f"Unsupported branch: {branch}")
+    try:
+        model = resolve_chat_model(branch)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    from llm.prompts import DOCTRINE_STAFF_SYSTEM_PROMPT
+    from llm.factory import get_llm_client
+
+    client = get_llm_client()
+    try:
+        answer = await client.chat(
+            [
+                {"role": "system", "content": DOCTRINE_STAFF_SYSTEM_PROMPT},
+                {"role": "user", "content": body.message.strip()},
+            ],
+            model=model,
+            temperature=0.2,
+            max_tokens=min(config.OLLAMA_MAX_TOKENS, 512),
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    from llm._utils import finalize_llm_answer_text
+
+    return {
+        "provider": config.LLM_PROVIDER,
+        "branch": branch,
+        "model": model,
+        "answer": finalize_llm_answer_text(answer),
     }
 
 

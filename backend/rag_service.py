@@ -61,6 +61,50 @@ def _filter_retrieved_chunks(retrieved: list[dict[str, Any]]) -> list[dict[str, 
     return filtered or retrieved
 
 
+def _chunk_fingerprint(item: dict[str, Any]) -> str:
+    meta = item.get("metadata") or {}
+    cid = str(meta.get("chunk_id") or meta.get("chunk_index") or "").strip()
+    if cid:
+        return f"id:{cid}"
+    doc = str(meta.get("document_id") or meta.get("source") or "")
+    body = re.sub(r"\s+", " ", str(item.get("content") or "")[:160].strip().lower())
+    return f"doc:{doc}|{body}"
+
+
+def _dedupe_retrieved_chunks(retrieved: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    """유사·중복 청크 제거 — 동일 문서 메타만 여러 개 올라오는 것 방지."""
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in retrieved:
+        fp = _chunk_fingerprint(item)
+        if fp in seen:
+            continue
+        seen.add(fp)
+        out.append(item)
+        if len(out) >= limit:
+            break
+    return out or retrieved[:limit]
+
+
+def _evidence_chunks_homogeneous(chunks: list[dict[str, Any]]) -> bool:
+    """동일 문서·유사 본문만 여러 개 검색된 경우 (메타 반복 답변 유발)."""
+    if len(chunks) < 3:
+        return False
+    titles: set[str] = set()
+    prefixes: list[str] = []
+    for c in chunks:
+        meta = c.get("metadata") or {}
+        title = str(meta.get("document_title") or meta.get("document_short_title") or "").strip()
+        if title:
+            titles.add(title)
+        body = re.sub(r"\s+", " ", str(c.get("content") or "")[:100].lower())
+        if body:
+            prefixes.append(body)
+    if len(titles) != 1:
+        return False
+    return len(set(prefixes)) <= max(2, len(prefixes) // 3)
+
+
 def _evidence_quality(chunks: list[dict[str, Any]]) -> dict[str, float]:
     if not chunks:
         return {"count": 0.0, "best_distance": 1.0, "avg_distance": 1.0}
@@ -440,7 +484,12 @@ Text:
 {text}
 """.strip()
         )
-        if total_chars + len(block) > config.RAG_CONTEXT_CHAR_LIMIT:
+        ctx_limit = (
+            config.VLLM_RAG_CONTEXT_CHAR_LIMIT
+            if config.LLM_PROVIDER == "vllm"
+            else config.RAG_CONTEXT_CHAR_LIMIT
+        )
+        if total_chars + len(block) > ctx_limit:
             break
         blocks.append(block)
         total_chars += len(block)
@@ -448,15 +497,27 @@ Text:
 
 
 def _full_rag_system_prompt(branch: str) -> str:
-    return (
-        f"{load_branch_prompt(branch)}\n"
-        "- If evidence is sufficient: use sections 요약 / 근거. 요약은 4-6개 불릿, 각 불릿 1-2문장으로 핵심만.\n"
-        "- 전체 분량은 한국어 기준 대략 400~800자 전후로 유지 (길게 늘리지 말 것).\n"
-        "- 근거에서는 [증거번호]만 쓰지 말고, 각 블록 첫 줄의 「표기용 제목」과 동일한 문서·장·절 이름을 번호 직후에 붙일 것.\n"
-        "  예: 근거: [2] NWP 5-01 — 제3장 … / [4] FM 3-0 — …  (가능하면 한 줄에 번호+제목+핵심 한 문장)\n"
-        "- Do NOT include a separate '한계' section header.\n"
-        "- If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps (without a '한계' section)."
-    )
+    if config.LLM_PROVIDER == "vllm":
+        length_rules = (
+            "- 최종 답변 본문은 반드시 한국어(한글)만 사용한다. 영어 설명 문장 금지.\n"
+            "- 근거가 충분하면 ## 요약 / ## 근거 섹션을 사용한다.\n"
+            "- 요약: 서로 다른 요점 2~4개 불릿만 (각 1~2문장). 같은 문장을 불릿마다 반복하지 말 것.\n"
+            "- 근거: [번호]마다 해당 Evidence Text의 고유 내용만 1~2문장. 문서 제목·목적 설명만 8번 반복 금지.\n"
+            "- Evidence가 메타설명만 있으면 「본문 단서 부족」을 명시하고 불릿 개수를 억지로 채우지 말 것.\n"
+            "- 한국어 기준 600~1400자 내외로 충분히 작성 (반복으로 길이 채우기 금지).\n"
+            "- 별도 '한계' 섹션 헤더는 쓰지 않는다."
+        )
+    else:
+        length_rules = (
+            "- 최종 답변 본문은 반드시 한국어(한글)만 사용한다. 영어 설명 문장 금지.\n"
+            "- If evidence is sufficient: use sections 요약 / 근거. 요약은 5-8개 불릿, 각 불릿 2-3문장.\n"
+            "- 전체 분량은 한국어 기준 대략 800~1500자 내외로 충분히 작성.\n"
+            "- 근거에서는 [증거번호]만 쓰지 말고, 각 블록 첫 줄의 「표기용 제목」과 동일한 문서·장·절 이름을 번호 직후에 붙일 것.\n"
+            "  예: 근거: [2] NWP 5-01 — 제3장 … / [4] FM 3-0 — …\n"
+            "- Do NOT include a separate '한계' section header.\n"
+            "- If evidence is insufficient, briefly state that the dataset lacks enough information and then provide helpful next steps."
+        )
+    return f"{load_branch_prompt(branch)}\n{length_rules}"
 
 
 def _prepare_rag_for_llm(
@@ -496,6 +557,7 @@ def _prepare_rag_for_llm(
         retrieved = retrieved[:retrieve_cap]
 
     retrieved = _filter_retrieved_chunks(retrieved)
+    retrieved = _dedupe_retrieved_chunks(retrieved, max(top_k, 6))
 
     if not retrieved:
         return {
@@ -526,7 +588,20 @@ def _prepare_rag_for_llm(
             },
         }
 
-    context = build_context(retrieved[:top_k])
+    use_chunks = retrieved[:top_k]
+    homogeneous = _evidence_chunks_homogeneous(use_chunks)
+    if homogeneous:
+        use_chunks = use_chunks[:3]
+        route_reason = f"{route_reason}|homogeneous_evidence"
+
+    context = build_context(use_chunks)
+    if homogeneous:
+        context = (
+            "[주의] 검색된 Evidence가 동일 문서·유사 구간입니다. "
+            "문서 제목·목적 설명을 반복하지 말고, Text에 있는 구체적 조항·절차만 2~3문장으로 요약하세요. "
+            "본문 단서가 없으면 「검색 본문 부족」을 명시하세요.\n\n"
+            + context
+        )
     return {
         "kind": "ready",
         "context": context,
@@ -535,8 +610,9 @@ def _prepare_rag_for_llm(
         "route_reason": route_reason,
         "route_confidence": route_confidence,
         "top_k": top_k,
-        "retrieved_n": len(retrieved[:top_k]),
+        "retrieved_n": len(use_chunks),
         "context_chars": len(context),
+        "homogeneous_evidence": homogeneous,
     }
 
 
@@ -560,7 +636,9 @@ def _answer_with_rag(
     route_confidence = prep["route_confidence"]
 
     t_llm_start = perf_counter()
-    answer = generate_rag_answer(q, context, system_prompt=_full_rag_system_prompt(branch))
+    answer = generate_rag_answer(
+        q, context, system_prompt=_full_rag_system_prompt(branch), branch=branch
+    )
     t_llm_ms = (perf_counter() - t_llm_start) * 1000
     t_total_ms = (perf_counter() - t0) * 1000
     logger.info(
@@ -714,7 +792,9 @@ def _stream_rag_token_events(
             "route_confidence": prep["route_confidence"],
         },
     )
-    for kind, chunk in iter_stream_rag_answer(q, prep["context"], _full_rag_system_prompt(branch)):
+    for kind, chunk in iter_stream_rag_answer(
+        q, prep["context"], _full_rag_system_prompt(branch), branch=branch
+    ):
         if kind == "error":
             yield _ndjson({"type": "error", "detail": chunk or USER_FACING_UNAVAILABLE})
             yield _ndjson({"type": "done"})

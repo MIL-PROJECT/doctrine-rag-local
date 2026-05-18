@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getInternalApiBaseUrl, getTopKMaxForRoutes } from "@/lib/env";
 
+/** vLLM RAG 응답은 30~120초 걸릴 수 있음 */
+export const maxDuration = 300;
+
 /**
  * FastAPI `/chat/stream` NDJSON 프록시. 브라우저는 한 줄씩 JSON(meta → delta* → done)을 읽습니다.
  */
@@ -27,6 +30,7 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(`${backend}/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(180_000),
       body: JSON.stringify({
         branch,
         question,

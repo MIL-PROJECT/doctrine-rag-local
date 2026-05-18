@@ -70,11 +70,20 @@ export type OllamaHealth = {
   error?: string;
 };
 
+export type LlmHealth = {
+  provider?: string;
+  base_url?: string;
+  reachable?: boolean;
+  model?: string | null;
+  error?: string | null;
+};
+
 export type HealthPayload = {
   status?: string;
   api?: string;
   chroma_documents?: number;
   vector_db?: { documents?: number; collection?: string; path?: string };
+  llm?: LlmHealth;
   ollama?: OllamaHealth;
   ollama_reachable?: boolean;
   ollama_model?: string;

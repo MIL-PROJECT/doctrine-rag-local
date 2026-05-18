@@ -385,8 +385,14 @@ export function SidebarPanel({
 }: SidebarPanelProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const isAdmin = Boolean(sessionUser?.permissions.includes("ADMIN"));
-  const modelLabel = health?.ollama?.model ?? health?.ollama_model ?? "—";
+  const llmProvider = health?.llm?.provider ?? "—";
+  const llmReachable = health?.llm?.reachable;
+  const modelLabel =
+    llmProvider === "vllm"
+      ? `vLLM (${health?.llm?.base_url ? "ngrok" : "—"})`
+      : (health?.ollama?.model ?? health?.ollama_model ?? "—");
   const ollamaReachable = health?.ollama?.reachable ?? health?.ollama_reachable;
+  const llmOk = llmReachable ?? (llmProvider === "ollama" ? ollamaReachable : undefined);
   const chunkCount = health?.chroma_documents ?? health?.vector_db?.documents;
 
   return (
@@ -453,7 +459,7 @@ export function SidebarPanel({
 
       <FooterBlock>
         <InfoCard>
-          <InfoTitle>Ollama 모델</InfoTitle>
+          <InfoTitle>{llmProvider === "vllm" ? "LLM (vLLM)" : "Ollama 모델"}</InfoTitle>
           <ModelLine>
             <Icon name="shield" size={16} />
             {modelLabel}
@@ -464,7 +470,9 @@ export function SidebarPanel({
             청크 수: {chunkCount === undefined ? "—" : String(chunkCount)}
           </IndexLine>
           <HealthHint>
-            Ollama: {ollamaReachable === undefined ? "—" : ollamaReachable ? "연결됨" : "끊김"} · 인제스트 플래그:{" "}
+            LLM({llmProvider}): {llmOk === undefined ? "—" : llmOk ? "연결됨" : "끊김"}
+            {llmProvider === "vllm" && ollamaReachable === false ? " · Ollama 표시는 vLLM 사용 시 무시" : ""} · 인제스트
+            플래그:{" "}
             {health?.ingest_flag === undefined ? "—" : health.ingest_flag ? "있음" : "없음"}
           </HealthHint>
           {isAdmin ? (

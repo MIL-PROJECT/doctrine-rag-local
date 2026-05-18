@@ -347,14 +347,18 @@ export default function ChatPage() {
           return n;
         });
       }
-    } catch {
+    } catch (err) {
+      const hint =
+        err instanceof Error && err.message
+          ? err.message
+          : "Next 서버(npm run dev)와 FastAPI(포트 8000)가 모두 실행 중인지 확인하세요.";
       setLastResponseMode(null);
       setSources([]);
       setMessages((prev) => {
         const n = [...prev];
         n[n.length - 1] = {
           role: "assistant",
-          content: "API 호출 중 오류가 발생했습니다. Next 서버와 FastAPI 백엔드 연결을 확인하세요.",
+          content: `API 호출 중 오류가 발생했습니다. ${hint}`,
           time: timeLabel(),
         };
         return n;

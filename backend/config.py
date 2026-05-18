@@ -1,4 +1,4 @@
-"""Configuration — Ollama + local embeddings only (no OpenAI)."""
+"""Configuration — LLM provider (Ollama / vLLM) + local embeddings."""
 
 from __future__ import annotations
 
@@ -41,6 +41,34 @@ def chunks_dir_for_branch(branch: str) -> Path:
 
 
 PROMPTS_DIR = (_BACKEND_ROOT / "rag" / "prompts").resolve()
+
+# --- LLM provider (ollama | vllm) ---
+LLM_PROVIDER = (os.getenv("LLM_PROVIDER") or "ollama").strip().lower()
+if LLM_PROVIDER not in ("ollama", "vllm"):
+    raise ValueError(f"Invalid LLM_PROVIDER: {LLM_PROVIDER!r}. Use 'ollama' or 'vllm'.")
+
+_raw_vllm_url = (os.getenv("VLLM_BASE_URL") or "").strip().rstrip("/")
+VLLM_BASE_URL = _raw_vllm_url
+VLLM_API_KEY = os.getenv("VLLM_API_KEY", "EMPTY")
+VLLM_TIMEOUT_SECONDS = float(os.getenv("VLLM_TIMEOUT_SECONDS", "120"))
+# vLLM 서버 max_model_len (Colab에서 4096 권장)
+VLLM_MAX_MODEL_LEN = max(512, int(os.getenv("VLLM_MAX_MODEL_LEN", "4096")))
+# vLLM RAG 근거 문자 상한 (max_model_len 4096 기준 ~3200 권장)
+VLLM_RAG_CONTEXT_CHAR_LIMIT = max(800, int(os.getenv("VLLM_RAG_CONTEXT_CHAR_LIMIT", "3200")))
+# RAG/채팅 최종 답변 출력 토큰 상한 (vLLM·Ollama 공통)
+LLM_MAX_OUTPUT_TOKENS = max(128, int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "2048")))
+# RAG 답변 전용 출력 상한 (반복 붕괴 완화 — vLLM 기본 512 권장)
+RAG_MAX_OUTPUT_TOKENS = max(128, int(os.getenv("RAG_MAX_OUTPUT_TOKENS", "512")))
+# vLLM 컨텍스트에서 출력에 최소한 보장할 토큰 수
+VLLM_MIN_OUTPUT_TOKENS = max(64, int(os.getenv("VLLM_MIN_OUTPUT_TOKENS", "768")))
+# vLLM 반복 억제 (OpenAI 호환 repetition_penalty)
+VLLM_REPETITION_PENALTY = float(os.getenv("VLLM_REPETITION_PENALTY", "1.12"))
+VLLM_FREQUENCY_PENALTY = float(os.getenv("VLLM_FREQUENCY_PENALTY", "0.35"))
+ARMY_MODEL = os.getenv("ARMY_MODEL", "army")
+NAVY_MODEL = os.getenv("NAVY_MODEL", "navy")
+AIR_MODEL = os.getenv("AIR_MODEL", "air")
+# common/합참 일반 채팅 등 branch 미지정 시 vLLM 모델 (선택)
+VLLM_DEFAULT_MODEL = os.getenv("VLLM_DEFAULT_MODEL", ARMY_MODEL)
 
 _raw_ollama_url = (os.getenv("OLLAMA_BASE_URL") or "http://localhost:11434").strip()
 OLLAMA_BASE_URL = _raw_ollama_url.rstrip("/") or "http://localhost:11434"
