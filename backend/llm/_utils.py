@@ -19,19 +19,10 @@ _THINK_CLOSE_TAGS = ("</think>", "</" + "think>")
 
 
 def finalize_llm_answer_text(text: str) -> str:
-    """Qwen 추론 블록 제거 후 한국어 본문만 남김."""
-    raw = text or ""
-    cleaned = _THINKING_BLOCK_RE.sub("", raw)
-    for closer in _THINK_CLOSE_TAGS:
-        if closer.lower() in cleaned.lower():
-            parts = re.split(re.escape(closer), cleaned, flags=re.IGNORECASE)
-            cleaned = parts[-1]
-    if re.search(r"<(?:think|redacted_thinking)", cleaned, re.I):
-        m = _HANGUL_RE.search(cleaned)
-        if m:
-            cleaned = cleaned[m.start() :]
-    cleaned = re.sub(r"</?(?:think|redacted_thinking)[^>]*>", "", cleaned, flags=re.I)
-    return cleaned.strip()
+    """Qwen 추론 블록 제거 (레거시 호환 — 전체 후처리는 output_guard.postprocess_answer)."""
+    from llm.output_guard import clean_model_output
+
+    return clean_model_output(text)
 
 
 def count_hangul(text: str) -> int:
@@ -104,10 +95,10 @@ def answer_has_degeneration(text: str) -> bool:
 
 
 def sanitize_llm_answer_text(text: str) -> str:
-    """추론 블록 제거 → 인라인 반복 제거 → 동일 줄 제거."""
-    return collapse_duplicate_answer_text(
-        collapse_inline_repetition(finalize_llm_answer_text(text))
-    )
+    """output_guard 전체 후처리 (bridge 추가 안전망)."""
+    from llm.output_guard import postprocess_answer
+
+    return postprocess_answer(text)
 
 
 def collapse_duplicate_answer_text(text: str, *, min_line_len: int = 24) -> str:

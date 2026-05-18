@@ -2,6 +2,7 @@
 
 import { AvatarCircle } from "@/components/atoms/AvatarCircle";
 import { Icon } from "@/components/atoms/Icon";
+import { MarkdownContent } from "@/components/atoms/MarkdownContent";
 import type { A2aLedgerChip, ChatMessage, StandardLedgerChip } from "@/lib/types";
 import { useMemo, useState } from "react";
 import styled, { css } from "styled-components";
@@ -41,14 +42,6 @@ const Time = styled.span`
   color: var(--text-muted);
 `;
 
-const Content = styled.p`
-  margin: 0;
-  white-space: pre-wrap;
-  font-size: 1.125rem;
-  line-height: 2rem;
-  color: var(--text-primary);
-`;
-
 const CommonCards = styled.div`
   display: flex;
   flex-direction: column;
@@ -86,7 +79,6 @@ const SummaryItem = styled.p`
   font-size: 0.92rem;
   line-height: 1.45;
   color: #111111;
-  white-space: pre-wrap;
 `;
 
 const CommonCard = styled.div<{ $branch: "육군" | "해군" | "공군" }>`
@@ -133,16 +125,19 @@ const BranchIcon = styled.span<{ $branch: "육군" | "해군" | "공군" }>`
 const CommonCardBody = styled.div`
   border-top: 1px solid var(--border);
   padding: 0.875rem;
-  white-space: pre-wrap;
-  font-size: 0.98rem;
-  line-height: 1.7;
-  color: var(--text-primary);
 `;
 
 type CommonSection = {
   label: "육군" | "해군" | "공군";
   body: string;
 };
+
+function extractJointSummaryBody(content: string): string | null {
+  const m = content.match(/^##\s*합동\s*비교\s*종합\s*\r?\n([\s\S]*?)(?=\r?\n##\s|$)/);
+  if (!m) return null;
+  const body = m[1].trim();
+  return body || null;
+}
 
 function parseCommonSections(content: string): CommonSection[] {
   const lines = content.split(/\r?\n/);
@@ -163,7 +158,9 @@ function parseCommonSections(content: string): CommonSection[] {
 
 function summaryLine(label: "육군" | "해군" | "공군", body: string): string {
   const compact = body.replace(/\s+/g, " ").trim();
-  return `${label}: ${compact || "요약 정보 없음"}`;
+  const first = compact.split(/(?<=[.!?。])\s+/)[0] || compact;
+  const short = first.length > 160 ? `${first.slice(0, 160)}…` : first;
+  return `${label}: ${short || "요약 정보 없음"}`;
 }
 
 const LedgerStrip = styled.div`
@@ -204,6 +201,10 @@ type ChatMessageBlockProps = {
 
 export function ChatMessageBlock({ message, index }: ChatMessageBlockProps) {
   const sections = useMemo(() => (message.role === "assistant" ? parseCommonSections(message.content) : []), [message]);
+  const jointSummaryBody = useMemo(
+    () => (message.role === "assistant" ? extractJointSummaryBody(message.content) : null),
+    [message]
+  );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const orderedSections = useMemo(() => {
     const order: Array<"육군" | "해군" | "공군"> = ["육군", "해군", "공군"];
@@ -227,9 +228,13 @@ export function ChatMessageBlock({ message, index }: ChatMessageBlockProps) {
           <CommonCards>
             <SummaryBar>
               <SummaryTitle>3군 비교 요약</SummaryTitle>
-              {orderedSections.map((section) => (
-                <SummaryItem key={`sum-${section.label}`}>{summaryLine(section.label, section.body)}</SummaryItem>
-              ))}
+              {jointSummaryBody ? (
+                <MarkdownContent compact>{jointSummaryBody}</MarkdownContent>
+              ) : (
+                orderedSections.map((section) => (
+                  <SummaryItem key={`sum-${section.label}`}>{summaryLine(section.label, section.body)}</SummaryItem>
+                ))
+              )}
             </SummaryBar>
             <CommonCardsGrid>
               {orderedSections.map((section) => {
@@ -252,14 +257,20 @@ export function ChatMessageBlock({ message, index }: ChatMessageBlockProps) {
                         {section.label} 답변 {isCollapsed ? "펼치기" : "접기"}
                       </HeaderInline>
                     </CommonCardHeader>
-                    {!isCollapsed && <CommonCardBody>{section.body}</CommonCardBody>}
+                    {!isCollapsed && (
+                      <CommonCardBody>
+                        <MarkdownContent compact>{section.body}</MarkdownContent>
+                      </CommonCardBody>
+                    )}
                   </CommonCard>
                 );
               })}
             </CommonCardsGrid>
           </CommonCards>
+        ) : message.role === "assistant" ? (
+          <MarkdownContent>{message.content}</MarkdownContent>
         ) : (
-          <Content>{message.content}</Content>
+          <MarkdownContent compact>{message.content}</MarkdownContent>
         )}
         {message.role === "assistant" && message.standardLedger ? (
           <LedgerStrip>{formatStandardLedgerLine(message.standardLedger)}</LedgerStrip>

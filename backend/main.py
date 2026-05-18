@@ -213,6 +213,8 @@ async def llm_health() -> dict[str, Any]:
     status = await llm_health_status()
     return {
         "provider": config.LLM_PROVIDER,
+        "vllm_base_url_configured": bool(config.VLLM_BASE_URL),
+        "ollama_base_url": config.OLLAMA_BASE_URL,
         "base_url": status.get("base_url"),
         "reachable": bool(status.get("reachable")),
         "model": status.get("model"),
@@ -222,7 +224,7 @@ async def llm_health() -> dict[str, Any]:
 
 @app.post("/llm/test")
 async def llm_test(body: LLMTestRequest) -> dict[str, Any]:
-    """군별 LoRA 모델 연결 테스트 (RAG 없이 단일 completion)."""
+    """군별 LoRA/Ollama 연결 테스트 (RAG 없음). 운영 배포 시 비활성화 검토."""
     branch = body.branch.strip()
     if branch not in (*config.SERVICE_BRANCHES, "air"):
         raise HTTPException(status_code=400, detail=f"Unsupported branch: {branch}")
@@ -231,30 +233,30 @@ async def llm_test(body: LLMTestRequest) -> dict[str, Any]:
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    from llm.prompts import DOCTRINE_STAFF_SYSTEM_PROMPT
+    from llm.prompts import build_system_prompt, wrap_user_message
     from llm.factory import get_llm_client
 
     client = get_llm_client()
     try:
-        answer = await client.chat(
+        result = await client.chat(
             [
-                {"role": "system", "content": DOCTRINE_STAFF_SYSTEM_PROMPT},
-                {"role": "user", "content": body.message.strip()},
+                {"role": "system", "content": build_system_prompt(branch)},
+                {"role": "user", "content": wrap_user_message(body.message.strip())},
             ],
             model=model,
             temperature=0.2,
-            max_tokens=min(config.OLLAMA_MAX_TOKENS, 512),
+            max_tokens=min(900, config.LLM_MAX_OUTPUT_TOKENS),
+            postprocess=True,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
-    from llm._utils import finalize_llm_answer_text
-
     return {
-        "provider": config.LLM_PROVIDER,
+        "provider": result.get("provider", config.LLM_PROVIDER),
         "branch": branch,
-        "model": model,
-        "answer": finalize_llm_answer_text(answer),
+        "model": result.get("model", model),
+        "answer": result.get("answer", ""),
+        "validation": result.get("validation", {}),
     }
 
 

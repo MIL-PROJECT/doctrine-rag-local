@@ -17,9 +17,10 @@ class BaseLLMClient(ABC):
         messages: list[dict[str, str]],
         model: str | None = None,
         temperature: float = 0.2,
-        max_tokens: int = 1024,
-    ) -> str:
-        """단일 완성 응답 텍스트를 반환."""
+        max_tokens: int = 900,
+        postprocess: bool = True,
+    ) -> dict[str, Any]:
+        """raw / answer / validation / model / provider dict 반환."""
 
     async def health_status(self) -> dict[str, Any]:
         """GET /llm/health 용 — 하위 클래스에서 오버라이드 가능."""

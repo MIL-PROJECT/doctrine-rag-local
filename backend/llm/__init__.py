@@ -12,6 +12,8 @@ from llm.bridge import (
     iter_stream_rag_answer,
     llm_health_status,
 )
+from llm.output_guard import postprocess_answer, validate_answer
+from llm.prompts import build_rag_user_prompt, build_system_prompt
 from llm.factory import get_llm_client, get_model_for_branch, resolve_chat_model
 from llm.ollama_client import ollama_health_status, ollama_healthcheck
 from llm.prompts import BASE_SYSTEM_PROMPT, load_branch_prompt
@@ -34,4 +36,8 @@ __all__ = [
     "ollama_health_status",
     "ollama_healthcheck",
     "resolve_chat_model",
+    "build_system_prompt",
+    "build_rag_user_prompt",
+    "postprocess_answer",
+    "validate_answer",
 ]

@@ -11,6 +11,7 @@ import httpx
 import config
 from llm._utils import looks_like_html, ngrok_request_headers, parse_ollama_chat_content
 from llm.base import BaseLLMClient
+from llm.output_guard import pack_chat_result
 
 logger = logging.getLogger(__name__)
 
@@ -61,11 +62,13 @@ class OllamaClient(BaseLLMClient):
         messages: list[dict[str, str]],
         model: str | None = None,
         temperature: float = 0.2,
-        max_tokens: int = 1024,
-    ) -> str:
+        max_tokens: int = 900,
+        postprocess: bool = True,
+    ) -> dict[str, Any]:
+        resolved_model = model or config.OLLAMA_MODEL
         url = f"{config.OLLAMA_BASE_URL}/api/chat"
         payload: dict[str, Any] = {
-            "model": model or config.OLLAMA_MODEL,
+            "model": resolved_model,
             "stream": False,
             "messages": messages,
             "options": {
@@ -103,7 +106,10 @@ class OllamaClient(BaseLLMClient):
                 raise RuntimeError(MODEL_NOT_FOUND_HINT)
             raise RuntimeError(f"Ollama API error: {msg[:500]}")
 
-        return parse_ollama_chat_content(data)
+        raw = parse_ollama_chat_content(data)
+        return pack_chat_result(
+            raw, model=resolved_model, provider=self.provider, postprocess=postprocess
+        )
 
     async def health_status(self) -> dict[str, Any]:
         return await ollama_health_status_async()

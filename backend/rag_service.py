@@ -296,7 +296,16 @@ def _answer_common_parallel_rag(question: str, top_k: int) -> dict[str, Any]:
                     "route_confidence": 0.0,
                 }
 
-    answer_blocks: list[str] = []
+    answers_by_branch = {
+        b: str((branch_results.get(b) or {}).get("answer") or "")
+        for b in config.SERVICE_BRANCHES
+    }
+
+    from llm.bridge import synthesize_joint_branch_comparison
+
+    joint_summary = synthesize_joint_branch_comparison(q, answers_by_branch, max_lines=5)
+
+    answer_blocks: list[str] = [joint_summary]
     merged_sources: list[dict[str, Any]] = []
     for b in config.SERVICE_BRANCHES:
         res = branch_results.get(b) or {}
@@ -636,9 +645,7 @@ def _answer_with_rag(
     route_confidence = prep["route_confidence"]
 
     t_llm_start = perf_counter()
-    answer = generate_rag_answer(
-        q, context, system_prompt=_full_rag_system_prompt(branch), branch=branch
-    )
+    answer = generate_rag_answer(q, context, branch=branch)
     t_llm_ms = (perf_counter() - t_llm_start) * 1000
     t_total_ms = (perf_counter() - t0) * 1000
     logger.info(

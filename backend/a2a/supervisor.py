@@ -18,9 +18,11 @@ class A2AState(TypedDict):
     military_number: str
 
 
-ARMY_KEYWORDS = ["육군", "지상작전", "MDMP", "D3A", "ARMY", "기동", "화력", "FM "]
-NAVY_KEYWORDS = ["해군", "해상", "함대", "해양", "NAVY", "JP 3-0", "합동작전", "JP "]
+ARMY_KEYWORDS = ["육군", "지상작전", "MDMP", "D3A", "ARMY", "FM "]
+NAVY_KEYWORDS = ["해군", "해상", "함대", "해양", "NAVY", "JP 3-0", "JP "]
 AIR_KEYWORDS = ["공군", "항공", "F2T2EA", "AIR", "JFACC", "AFDP", "공역", "ATO"]
+# 화력·기동 등은 3군 공통 주제 — 단일 군으로 오인 라우팅 방지
+JOINT_KEYWORDS = ["3군", "삼군", "육해공", "합동", "전군", "비교 요약", "비교분석", "종합"]
 
 
 def _actor_audit(user_id: str, military_number: str) -> dict[str, str]:
@@ -68,14 +70,17 @@ def _attach_blockchain(
 
 def analyze_question(state: A2AState) -> A2AState:
     q = state["question"]
-    targets = []
+    targets: list[str] = []
 
-    if any(kw in q for kw in ARMY_KEYWORDS):
-        targets.append("army")
-    if any(kw in q for kw in NAVY_KEYWORDS):
-        targets.append("navy")
-    if any(kw in q for kw in AIR_KEYWORDS):
-        targets.append("air_force")
+    if any(kw in q for kw in JOINT_KEYWORDS):
+        targets = ["army", "navy", "air_force"]
+    else:
+        if any(kw in q for kw in ARMY_KEYWORDS):
+            targets.append("army")
+        if any(kw in q for kw in NAVY_KEYWORDS):
+            targets.append("navy")
+        if any(kw in q for kw in AIR_KEYWORDS):
+            targets.append("air_force")
 
     if not targets:
         targets = ["army", "navy", "air_force"]
@@ -117,25 +122,34 @@ def invoke_agents(state: A2AState) -> A2AState:
 
 def synthesize_answer(state: A2AState) -> A2AState:
     answers = state["answers"]
+    branch_ko = {"army": "육군", "navy": "해군", "air_force": "공군"}
 
     if len(answers) == 1:
         branch = list(answers.keys())[0]
-        final = f"## {branch.upper()} 교리 답변\n\n{answers[branch]['answer']}"
+        final = f"## {branch_ko.get(branch, branch)} 교리 답변\n\n{answers[branch]['answer']}"
+        synthesis_mode = "single_branch"
     else:
-        parts = ["# 합동 교리 답변 (Joint Doctrine Response)\n"]
-        branch_labels = {"army": "ARMY", "navy": "NAVY", "air_force": "AIR_FORCE"}
-        for branch, result in answers.items():
-            label = branch_labels.get(branch, branch.upper())
-            parts.append(f"\n## {label} 관점\n")
-            parts.append(result["answer"])
+        from llm.bridge import synthesize_joint_branch_comparison
+
+        by_branch = {b: str((answers[b] or {}).get("answer") or "") for b in answers}
+        joint_summary = synthesize_joint_branch_comparison(
+            state["question"], by_branch, max_lines=5
+        )
+        parts = [joint_summary]
+        for branch in ("army", "navy", "air_force"):
+            if branch not in answers:
+                continue
+            label = branch_ko.get(branch, branch)
+            parts.append(f"\n## {label}\n{answers[branch]['answer']}")
         final = "\n".join(parts)
+        synthesis_mode = "llm_joint_summary"
 
     record(
         "supervisor_synthesized",
         {
             "task_id": state["task_id"],
             "branches_consulted": list(answers.keys()),
-            "synthesis_mode": "concat",
+            "synthesis_mode": synthesis_mode,
             "final_answer_length": len(final),
             **_actor_audit(state["user_id"], state["military_number"]),
         },
