@@ -9,7 +9,7 @@ import styled from "styled-components";
 
 function userDisplayInitials(user: DoctrineUser): string {
   const name = user.name.trim();
-  if (name.length >= 2) return name.slice(0, 2);
+  if (name.length >= 2) return name;
   if (name.length === 1) return `${name}${user.id.trim().charAt(0) || ""}`.slice(0, 2);
   const id = user.id.trim();
   if (id.length >= 2) return id.slice(0, 2).toUpperCase();
@@ -54,8 +54,8 @@ const UserCardInner = styled.div`
 
 const UserAvatar = styled.div`
   flex-shrink: 0;
-  width: 3.25rem;
-  height: 3.25rem;
+  width: 4.25rem;
+  height: 4.25rem;
   border-radius: 0.9rem;
   display: flex;
   align-items: center;
@@ -81,8 +81,8 @@ const UserCardLabel = styled.div`
   align-items: center;
   gap: 0.35rem;
   margin-bottom: 0.2rem;
-  font-size: 0.625rem;
-  font-weight: 800;
+  font-size: 0.825rem;
+  font-weight: 1000;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -411,7 +411,7 @@ export function SidebarPanel({
             <UserAvatar aria-hidden>{userDisplayInitials(sessionUser)}</UserAvatar>
             <UserCardMain>
               <UserCardLabel>
-                <Icon name="user" size={14} />
+                <Icon name="user" size={20} />
                 내 프로필
               </UserCardLabel>
               <UserName>{sessionUser.name}</UserName>
@@ -434,7 +434,7 @@ export function SidebarPanel({
       <Section>
         <SectionTitle>최근 대화</SectionTitle>
         {conversations.length === 0 ? (
-          <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+          <p style={{ margin: 0, fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.5, letterSpacing: "-0.02em" }}>
             새 채팅 후 질문을 보내면 여기에 쌓입니다.
           </p>
         ) : (

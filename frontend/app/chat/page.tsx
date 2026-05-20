@@ -46,7 +46,7 @@ export default function ChatPage() {
     {
       role: "assistant",
       content:
-        "DoctrineRAG에 오신 것을 환영합니다. 아래 입력창에 교리 관련 질문을 입력하면 로컬 Chroma 인덱스와 Ollama가 답변을 생성합니다.",
+        "DoctrineRAG에 오신 것을 환영합니다. 아래 입력창에 교리 관련 질문을 입력하면 DOCTOR가 답변을 생성합니다.",
       time: "",
     },
   ]);
@@ -426,7 +426,7 @@ export default function ChatPage() {
       {
         role: "assistant",
         content:
-          "DoctrineRAG에 오신 것을 환영합니다. 아래 입력창에 교리 관련 질문을 입력하면 로컬 Chroma 인덱스와 Ollama가 답변을 생성합니다.",
+          "DoctrineRAG에 오신 것을 환영합니다. 아래 입력창에 교리 관련 질문을 입력하면 DOCTOR가 답변을 생성합니다.",
         time: timeLabel(),
       },
     ]);

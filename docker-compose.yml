@@ -5,7 +5,7 @@ services:
       context: ./backend
     container_name: doctrine-rag-ollama-backend
     command: >
-      sh -c "uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       VLLM_BASE_URL: ${VLLM_BASE_URL:-}

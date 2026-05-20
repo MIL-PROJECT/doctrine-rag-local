@@ -2,7 +2,7 @@
 
 import { ChatMessageBlock } from "@/components/molecules/ChatMessageBlock";
 import { PromptComposer } from "@/components/molecules/PromptComposer";
-import type { ChatMessage, ChatMode, ChatPipeline, ChatResponseMode } from "@/lib/types";
+import type { BranchId, ChatMessage, ChatMode, ChatPipeline, ChatResponseMode } from "@/lib/types";
 import { FormEvent, useEffect, useRef } from "react";
 import styled from "styled-components";
 
@@ -119,6 +119,7 @@ type ChatWorkspaceProps = {
   lastResponseMode: ChatResponseMode | null;
   pipeline: ChatPipeline;
   onPipelineChange: (p: ChatPipeline) => void;
+  branch: BranchId;
 };
 
 export function ChatWorkspace({
@@ -134,6 +135,7 @@ export function ChatWorkspace({
   lastResponseMode,
   pipeline,
   onPipelineChange,
+  branch,
 }: ChatWorkspaceProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -173,7 +175,12 @@ export function ChatWorkspace({
       <MessageViewport>
         <MessageList>
           {messages.map((message, index) => (
-            <ChatMessageBlock key={`${message.role}-${index}-${message.time}`} message={message} index={index} />
+            <ChatMessageBlock
+              key={`${message.role}-${index}-${message.time}`}
+              message={message}
+              index={index}
+              pageBranch={branch}
+            />
           ))}
         </MessageList>
         {busy && <BusyText>답변 생성 중…</BusyText>}

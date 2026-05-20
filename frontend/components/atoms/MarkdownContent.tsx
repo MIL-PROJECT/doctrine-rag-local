@@ -1,16 +1,16 @@
 "use client";
 
-import { ensureMarkdownSectionHeadings } from "@/lib/markdownSections";
+import { formatDoctrineMarkdown } from "@/lib/markdownSections";
 import { useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import type { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 
-const Article = styled.article<{ $compact?: boolean }>`
-  font-size: ${({ $compact }) => ($compact ? "0.98rem" : "1.125rem")};
-  line-height: ${({ $compact }) => ($compact ? 1.7 : 1.85)};
-  color: var(--text-primary);
+type Variant = "default" | "compact" | "card";
+
+const articleStyles = css<{ $variant: Variant; $muted?: boolean }>`
+  color: ${({ $muted }) => ($muted ? "var(--text-secondary)" : "var(--text-primary)")};
   word-break: break-word;
 
   & > *:first-child {
@@ -20,31 +20,27 @@ const Article = styled.article<{ $compact?: boolean }>`
     margin-bottom: 0;
   }
 
-  h1,
-  h3,
-  h4 {
-    color: var(--text-primary);
-    font-weight: 800;
-    line-height: 1.35;
-    margin: 1em 0 0.4em;
-  }
-
   p {
-    margin: 0.45em 0;
+    margin: 0.35em 0;
   }
 
   ul,
   ol {
-    margin: 0.35em 0 0.75em;
-    padding-left: 1.35em;
+    margin: 0.25em 0 0.55em;
+    padding-left: 1.2em;
   }
 
   li {
-    margin: 0.2em 0;
+    margin: 0.28em 0;
+    padding-left: 0.15em;
+  }
+
+  li::marker {
+    color: color-mix(in srgb, var(--text-muted) 70%, var(--text-primary));
   }
 
   li > p {
-    margin: 0.15em 0;
+    margin: 0.1em 0;
   }
 
   strong {
@@ -54,46 +50,132 @@ const Article = styled.article<{ $compact?: boolean }>`
 
   code {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 0.9em;
+    font-size: 0.88em;
     background: color-mix(in srgb, var(--surface-muted) 85%, transparent);
     padding: 0.1em 0.35em;
     border-radius: 0.25rem;
   }
+
+  ${({ $variant }) =>
+    $variant === "default" &&
+    css`
+      font-size: 1.125rem;
+      line-height: 1.85;
+    `}
+
+  ${({ $variant }) =>
+    ($variant === "compact" || $variant === "card") &&
+    css`
+      font-size: 0.9rem;
+      line-height: 1.65;
+    `}
+
+  ${({ $variant }) =>
+    $variant === "card" &&
+    css`
+      font-size: 0.875rem;
+      line-height: 1.6;
+
+      ul,
+      ol {
+        margin-top: 0.15em;
+      }
+
+      p + ul,
+      p + ol {
+        margin-top: 0.35em;
+      }
+    `}
 `;
 
-const SectionHeading = styled.h2<{ $compact?: boolean }>`
-  font-size: ${({ $compact }) => ($compact ? "1.15rem" : "1.4rem")};
+const Article = styled.article<{ $variant: Variant; $muted?: boolean }>`
+  ${articleStyles}
+`;
+
+const SectionHeading = styled.h2<{ $variant: Variant; $accent?: string }>`
   font-weight: 900;
-  color: var(--text-primary);
-  line-height: 1.3;
+  line-height: 1.28;
   letter-spacing: -0.02em;
-  margin: ${({ $compact }) => ($compact ? "1.1em 0 0.45em" : "1.35em 0 0.55em")};
-  padding-bottom: 0.3em;
-  border-bottom: 2px solid color-mix(in srgb, var(--link-accent) 28%, var(--border));
+  color: ${({ $accent }) => $accent || "var(--text-primary)"};
+  border-bottom: 2px solid
+    color-mix(in srgb, ${({ $accent }) => $accent || "var(--link-accent)"} 35%, var(--border));
+  padding-bottom: 0.28em;
+
+  ${({ $variant }) =>
+    $variant === "default"
+      ? css`
+          font-size: 1.35rem;
+          margin: 1.25em 0 0.5em;
+        `
+      : css`
+          font-size: 1.02rem;
+          margin: 0.85em 0 0.4em;
+        `}
+
+  ${({ $variant }) =>
+    $variant === "card" &&
+    css`
+      font-size: 0.95rem;
+      margin: 0.5em 0 0.35em;
+    `}
+`;
+
+const SubHeading = styled.h3<{ $muted?: boolean }>`
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: ${({ $muted }) => ($muted ? "var(--text-muted)" : "var(--text-secondary)")};
+  margin: 0.75em 0 0.35em;
 `;
 
 type MarkdownContentProps = {
   children: string;
   compact?: boolean;
+  variant?: Variant;
+  accent?: string;
+  muted?: boolean;
+  /** 카드에서 SectionTitle과 중복되는 첫 h2 숨김 */
+  hideTopHeading?: boolean;
   className?: string;
 };
 
-export function MarkdownContent({ children, compact = false, className }: MarkdownContentProps) {
-  const source = useMemo(() => ensureMarkdownSectionHeadings((children || "").trim()), [children]);
+export function MarkdownContent({
+  children,
+  compact = false,
+  variant,
+  accent,
+  muted = false,
+  hideTopHeading = false,
+  className,
+}: MarkdownContentProps) {
+  const resolvedVariant: Variant = variant ?? (compact ? "compact" : "default");
+  const source = useMemo(() => formatDoctrineMarkdown((children || "").trim()), [children]);
 
-  const components = useMemo<Components>(
-    () => ({
-      h2: ({ children: headingChildren }) => (
-        <SectionHeading $compact={compact}>{headingChildren}</SectionHeading>
+  const components = useMemo<Components>(() => {
+    let skippedTopH2 = false;
+    return {
+      h2: ({ children: headingChildren }) => {
+        if (hideTopHeading && !skippedTopH2) {
+          skippedTopH2 = true;
+          return null;
+        }
+        return (
+          <SectionHeading $variant={resolvedVariant} $accent={accent}>
+            {headingChildren}
+          </SectionHeading>
+        );
+      },
+      h3: ({ children: headingChildren }) => (
+        <SubHeading $muted={muted}>{headingChildren}</SubHeading>
       ),
-    }),
-    [compact],
-  );
+    };
+  }, [resolvedVariant, accent, muted, hideTopHeading]);
 
   if (!source) return null;
 
   return (
-    <Article $compact={compact} className={className}>
+    <Article $variant={resolvedVariant} $muted={muted} className={className}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {source}
       </ReactMarkdown>
