@@ -62,6 +62,7 @@ def _attach_blockchain(
             response["blockchain"] = {
                 "skipped": True,
                 "reason": str(bc_result.get("reason", "unknown")),
+                **({"error": bc_result["error"]} if bc_result.get("error") else {}),
             }
     except Exception as e:
         record("blockchain_hook_failed", {"task_id": task_id, "error": str(e)[:200]})
@@ -129,7 +130,7 @@ def synthesize_answer(state: A2AState) -> A2AState:
         final = f"## {branch_ko.get(branch, branch)} 교리 답변\n\n{answers[branch]['answer']}"
         synthesis_mode = "single_branch"
     else:
-        from llm.bridge import synthesize_joint_branch_comparison
+        from app.llm.bridge import synthesize_joint_branch_comparison
 
         by_branch = {b: str((answers[b] or {}).get("answer") or "") for b in answers}
         joint_summary = synthesize_joint_branch_comparison(
@@ -182,7 +183,7 @@ def run_a2a_task(
     user_id: str | None = None,
     military_number: str | None = None,
 ) -> dict[str, Any]:
-    from a2a import cache
+    from app.a2a import cache
 
     uid = (user_id or "").strip()
     mid = (military_number or "").strip()

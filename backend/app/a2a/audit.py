@@ -40,11 +40,6 @@ def emit_blockchain_event(event_payload: dict) -> dict:
     On failure or when disabled, returns ``{"skipped": True, ...}`` without raising.
     """
     try:
-        from blockchain.config import BLOCKCHAIN_ENABLED
-
-        if not BLOCKCHAIN_ENABLED:
-            return {"skipped": True, "reason": "blockchain_disabled"}
-
         from app.blockchain.local_ledger import append_event
 
         return append_event(event_payload)

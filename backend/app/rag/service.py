@@ -301,7 +301,7 @@ def _answer_common_parallel_rag(question: str, top_k: int) -> dict[str, Any]:
         for b in config.SERVICE_BRANCHES
     }
 
-    from llm.bridge import synthesize_joint_branch_comparison
+    from app.llm.bridge import synthesize_joint_branch_comparison
 
     joint_summary = synthesize_joint_branch_comparison(q, answers_by_branch, max_lines=3)
 

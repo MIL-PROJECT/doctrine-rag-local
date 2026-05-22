@@ -20,7 +20,7 @@ _THINK_CLOSE_TAGS = ("</think>", "</" + "think>")
 
 def finalize_llm_answer_text(text: str) -> str:
     """Qwen 추론 블록 제거 (레거시 호환 — 전체 후처리는 output_guard.postprocess_answer)."""
-    from llm.output_guard import clean_model_output
+    from app.llm.output_guard import clean_model_output
 
     return clean_model_output(text)
 
@@ -96,7 +96,7 @@ def answer_has_degeneration(text: str) -> bool:
 
 def sanitize_llm_answer_text(text: str) -> str:
     """output_guard 전체 후처리 (bridge 추가 안전망)."""
-    from llm.output_guard import postprocess_answer
+    from app.llm.output_guard import postprocess_answer
 
     return postprocess_answer(text)
 
