@@ -42,53 +42,53 @@ const Page = styled.main<{ $darkMode: boolean; $branch: BranchId }>`
           }
         : $branch === "navy"
           ? {
-              a: "#4b5563",
-              aDark: "#d1d5db",
-              pageBgLight: "#e5e7eb",
-              surfaceMutedLight: "#d1d5db",
-              borderLight: "#9ca3af",
-              pageBgDark: "#1f2937",
-              surfaceDark: "#2f3b4d",
-              surfaceMutedDark: "#374151",
-              borderDark: "#6b7280",
-              gradLight: "linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 45%, #d1d5db 100%)",
-              gradDark: "linear-gradient(180deg, #4b5563 0%, #374151 45%, #1f2937 100%)",
-              convTimeLight: "rgba(31,41,55,0.85)",
-              convTimeDark: "#e5e7eb",
-              surfaceHoverLight: "#cbd5e1",
+              a: "#1d4ed8",
+              aDark: "#60a5fa",
+              pageBgLight: "#eff6ff",
+              surfaceMutedLight: "#eff6ff",
+              borderLight: "#bfdbfe",
+              pageBgDark: "#030712",
+              surfaceDark: "#0f1729",
+              surfaceMutedDark: "#152238",
+              borderDark: "#1e40af",
+              gradLight: "linear-gradient(180deg, #eff6ff 0%, #f1f5f9 40%, #f8fafc 100%)",
+              gradDark: "linear-gradient(180deg, #0c1929 0%, #050c18 25%, #020617 55%)",
+              convTimeLight: "rgba(255,255,255,0.9)",
+              convTimeDark: "#bfdbfe",
+              surfaceHoverLight: "#dbeafe",
             }
           : $branch === "air_force"
             ? {
-              a: "#6d28d9",
-              aDark: "#a78bfa",
-              pageBgLight: "#faf5ff",
-              surfaceMutedLight: "#f5f3ff",
-              borderLight: "#ddd6fe",
-              pageBgDark: "#0a0612",
-              surfaceDark: "#14121f",
-              surfaceMutedDark: "#1e1b2e",
-              borderDark: "#5b21b6",
-              gradLight: "linear-gradient(180deg, #faf5ff 0%, #f1f5f9 38%, #f8fafc 100%)",
-              gradDark: "linear-gradient(180deg, #2e1065 0%, #0f0a1a 22%, #020617 55%)",
-              convTimeLight: "rgba(255,255,255,0.9)",
-              convTimeDark: "#ddd6fe",
-              surfaceHoverLight: "#ede9fe",
+              a: "#0369a1",
+              aDark: "#67c3e8",
+              pageBgLight: "#e8f4fc",
+              surfaceMutedLight: "#d4ebf9",
+              borderLight: "#a8d4f0",
+              pageBgDark: "#062a40",
+              surfaceDark: "#0a3f5c",
+              surfaceMutedDark: "#124e63",
+              borderDark: "#025a8a",
+              gradLight: "linear-gradient(180deg, #e8f4fc 0%, #d4ebf9 42%, #f1f5f9 100%)",
+              gradDark: "linear-gradient(180deg, #0a3f5c 0%, #062a40 28%, #020617 55%)",
+              convTimeLight: "rgba(255,255,255,0.92)",
+              convTimeDark: "#a8d4f0",
+              surfaceHoverLight: "#a8d4f0",
             }
             : {
-                a: "#1d4ed8",
-                aDark: "#60a5fa",
-                pageBgLight: "#eff6ff",
-                surfaceMutedLight: "#eff6ff",
-                borderLight: "#bfdbfe",
-                pageBgDark: "#030712",
-                surfaceDark: "#0f1729",
-                surfaceMutedDark: "#152238",
-                borderDark: "#1e40af",
-                gradLight: "linear-gradient(180deg, #eff6ff 0%, #f1f5f9 40%, #f8fafc 100%)",
-                gradDark: "linear-gradient(180deg, #0c1929 0%, #050c18 25%, #020617 55%)",
+                a: "#6d28d9",
+                aDark: "#a78bfa",
+                pageBgLight: "#faf5ff",
+                surfaceMutedLight: "#f5f3ff",
+                borderLight: "#ddd6fe",
+                pageBgDark: "#0a0612",
+                surfaceDark: "#14121f",
+                surfaceMutedDark: "#1e1b2e",
+                borderDark: "#5b21b6",
+                gradLight: "linear-gradient(180deg, #faf5ff 0%, #f1f5f9 38%, #f8fafc 100%)",
+                gradDark: "linear-gradient(180deg, #2e1065 0%, #0f0a1a 22%, #020617 55%)",
                 convTimeLight: "rgba(255,255,255,0.9)",
-                convTimeDark: "#bfdbfe",
-                surfaceHoverLight: "#dbeafe",
+                convTimeDark: "#ddd6fe",
+                surfaceHoverLight: "#ede9fe",
               };
 
     if ($darkMode) {
@@ -326,6 +326,7 @@ export function DoctrineRagTemplate({
             lastResponseMode={lastResponseMode}
             pipeline={chatPipeline}
             onPipelineChange={onChatPipelineChange}
+            branch={branch}
           />
         ) : activeTab === "교범 검색" ? (
           <DoctrineSearchWorkspace

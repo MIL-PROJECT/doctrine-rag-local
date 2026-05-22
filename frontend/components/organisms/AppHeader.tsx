@@ -15,10 +15,10 @@ const Shell = styled.header<{ $branch: "common" | "army" | "navy" | "air_force" 
     $branch === "army"
       ? "linear-gradient(to right, #052e16, #166534, #14532d)"
       : $branch === "navy"
-        ? "linear-gradient(to right, #111827, #4b5563, #111827)"
+        ? "linear-gradient(to right, #020617, #1e40af, #1e293b)"
         : $branch === "air_force"
-          ? "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"
-          : "linear-gradient(to right, #020617, #1e40af, #1e293b)"};
+          ? "linear-gradient(to right, #025a8a, #0284c7, #0ea5e9)"
+          : "linear-gradient(to right, #1e1b4b, #6d28d9, #312e81)"};
   color: #fff;
   box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.35);
   backdrop-filter: saturate(1.15) blur(10px);
